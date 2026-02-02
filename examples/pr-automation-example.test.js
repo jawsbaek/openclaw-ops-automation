@@ -2,7 +2,7 @@
  * Tests for PR automation example
  */
 
-const { greetUser, calculateSum, canAutoMerge } = require('./pr-automation-example');
+import { greetUser, calculateSum, canAutoMerge } from './pr-automation-example.js';
 
 describe('PR Automation Example', () => {
   describe('greetUser', () => {

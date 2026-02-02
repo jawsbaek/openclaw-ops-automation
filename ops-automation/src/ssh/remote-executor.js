@@ -3,10 +3,12 @@
  * SSH를 통한 원격 명령 안전 실행
  */
 
-const _fs = require('node:fs').promises;
-const _path = require('node:path');
-const SSHConnectionPool = require('./connection-pool');
-const logger = require('../../lib/logger');
+import { promises as _fs } from 'node:fs';
+import _path from 'node:path';
+import SSHConnectionPool from './connection-pool.js';
+import createLogger from '../../lib/logger.js';
+
+const logger = createLogger('remote-executor');
 
 class RemoteExecutor {
   constructor(serversConfig, whitelistConfig) {
@@ -363,4 +365,4 @@ class RemoteExecutor {
   }
 }
 
-module.exports = RemoteExecutor;
+export default RemoteExecutor;
