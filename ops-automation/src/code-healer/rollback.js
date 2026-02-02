@@ -22,7 +22,7 @@ class RollbackSystem {
     logger.warn(`사유: ${reason}`);
 
     const deployment = this.deployManager.deployments.get(deploymentId);
-    
+
     if (!deployment) {
       throw new Error(`배포를 찾을 수 없음: ${deploymentId}`);
     }
@@ -61,10 +61,9 @@ class RollbackSystem {
       logger.info(`롤백 완료: ${rollback.id}`);
 
       return rollback;
-
     } catch (err) {
       logger.error(`롤백 실패: ${rollback.id}`, err);
-      
+
       rollback.status = 'failed';
       rollback.error = err.message;
       rollback.completedAt = new Date().toISOString();
@@ -104,12 +103,11 @@ class RollbackSystem {
 
       step.status = 'success';
       step.completedAt = new Date().toISOString();
-
     } catch (err) {
       step.status = 'failed';
       step.error = err.message;
       step.completedAt = new Date().toISOString();
-      
+
       throw err;
     }
   }
@@ -117,7 +115,7 @@ class RollbackSystem {
   /**
    * 백업에서 복원
    */
-  async restoreFromBackup(targets, deployment, stage) {
+  async restoreFromBackup(targets, _deployment, stage) {
     logger.info(`백업 복원: ${stage.name}`);
 
     // 최근 백업 찾기
@@ -180,7 +178,7 @@ class RollbackSystem {
   /**
    * 트래픽 롤백 (블루-그린)
    */
-  async rollbackTraffic(deployment) {
+  async rollbackTraffic(_deployment) {
     logger.info('트래픽 롤백 (블루-그린)');
 
     // 트래픽을 이전 환경(블루)로 되돌림
@@ -193,7 +191,7 @@ class RollbackSystem {
   /**
    * 데이터베이스 롤백
    */
-  async rollbackDatabase(deployment, options = {}) {
+  async rollbackDatabase(_deployment, options = {}) {
     logger.warn('데이터베이스 롤백 시작 (위험!)');
 
     const { dryRun = true, backupId } = options;
@@ -206,7 +204,7 @@ class RollbackSystem {
     // 실제 DB 마이그레이션 롤백
     // 매우 위험하므로 수동 승인 필수
     const approved = await this.requestCriticalApproval('DB 롤백');
-    
+
     if (!approved) {
       throw new Error('DB 롤백 승인 거부됨');
     }
@@ -229,7 +227,8 @@ class RollbackSystem {
     };
 
     // 각 서버의 상태 수집
-    for (const target of targets.slice(0, 1)) { // 첫 번째 서버만 (대표)
+    for (const target of targets.slice(0, 1)) {
+      // 첫 번째 서버만 (대표)
       const state = await this.captureServerState(target);
       snapshot.state[target] = state;
     }
@@ -277,17 +276,17 @@ class RollbackSystem {
   getAffectedStages(deployment, partial) {
     if (partial) {
       // 실패한 단계만 롤백
-      return deployment.stages.filter(s => s.status === 'failed' || s.status === 'in_progress');
+      return deployment.stages.filter((s) => s.status === 'failed' || s.status === 'in_progress');
     } else {
       // 모든 성공한 단계 롤백
-      return deployment.stages.filter(s => s.status === 'success');
+      return deployment.stages.filter((s) => s.status === 'success');
     }
   }
 
   /**
    * 롤백 검증
    */
-  async verifyRollback(deployment, stages) {
+  async verifyRollback(_deployment, stages) {
     logger.info('롤백 검증 중...');
 
     // 모든 단계에서 헬스 체크
@@ -311,7 +310,7 @@ class RollbackSystem {
 
     for (const stage of deployment.stages) {
       const stageTargets = this.deployManager.getStageTargets(stage);
-      stageTargets.forEach(t => targets.add(t));
+      stageTargets.forEach((t) => targets.add(t));
     }
 
     return Array.from(targets);
@@ -322,10 +321,10 @@ class RollbackSystem {
    */
   async requestCriticalApproval(action) {
     logger.warn(`⚠️  중요 작업 승인 필요: ${action}`);
-    
+
     // 실제로는 관리자에게 알림 후 승인 대기
     // Slack, PagerDuty 등 사용
-    
+
     return false; // 기본적으로 거부
   }
 
@@ -340,7 +339,7 @@ class RollbackSystem {
    * 특정 롤백 조회
    */
   getRollback(rollbackId) {
-    return this.rollbacks.find(r => r.id === rollbackId);
+    return this.rollbacks.find((r) => r.id === rollbackId);
   }
 
   /**
@@ -348,8 +347,8 @@ class RollbackSystem {
    */
   getStatistics() {
     const total = this.rollbacks.length;
-    const successful = this.rollbacks.filter(r => r.status === 'completed').length;
-    const failed = this.rollbacks.filter(r => r.status === 'failed').length;
+    const successful = this.rollbacks.filter((r) => r.status === 'completed').length;
+    const failed = this.rollbacks.filter((r) => r.status === 'failed').length;
 
     return {
       total,
@@ -363,7 +362,7 @@ class RollbackSystem {
    * 대기
    */
   sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**

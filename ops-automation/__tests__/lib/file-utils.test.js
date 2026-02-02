@@ -2,20 +2,13 @@
  * @fileoverview Tests for file utilities
  */
 
-import { existsSync, unlinkSync, rmdirSync } from 'fs';
-import { join } from 'path';
-import { saveMetrics, saveAnalysis, saveIncident, saveReport } from '../../lib/file-utils.js';
+import { saveAnalysis, saveIncident, saveMetrics, saveReport } from '../../lib/file-utils.js';
 
 describe('File Utils', () => {
   afterEach(() => {
     // Cleanup test files - only if they exist
-    const testFiles = [
-      '../../metrics',
-      '../../analysis',
-      '../../incidents',
-      '../../reports'
-    ];
-    
+    const _testFiles = ['../../metrics', '../../analysis', '../../incidents', '../../reports'];
+
     // Note: In a real test, you'd use a test-specific directory
     // This is simplified for demonstration
   });
@@ -31,7 +24,7 @@ describe('File Utils', () => {
     };
 
     const filepath = saveMetrics(metrics);
-    
+
     expect(filepath).toBeDefined();
     expect(typeof filepath).toBe('string');
     expect(filepath).toContain('metrics');
@@ -41,7 +34,7 @@ describe('File Utils', () => {
   test('saveAnalysis creates an analysis file', () => {
     const analysis = '# Test Analysis\n\nThis is a test.';
     const filepath = saveAnalysis(analysis);
-    
+
     expect(filepath).toBeDefined();
     expect(filepath).toContain('analysis');
     expect(filepath).toContain('log-insights');
@@ -52,7 +45,7 @@ describe('File Utils', () => {
     const incidentId = 'test-incident-123';
     const content = '# Incident Report\n\nTest incident.';
     const filepath = saveIncident(incidentId, content);
-    
+
     expect(filepath).toBeDefined();
     expect(filepath).toContain('incidents');
     expect(filepath).toContain(incidentId);
@@ -62,7 +55,7 @@ describe('File Utils', () => {
   test('saveReport creates a report file', () => {
     const content = '# Daily Report\n\nTest report.';
     const filepath = saveReport('daily', content);
-    
+
     expect(filepath).toBeDefined();
     expect(filepath).toContain('reports');
     expect(filepath).toContain('ops-report');

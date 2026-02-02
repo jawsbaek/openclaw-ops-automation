@@ -3,9 +3,9 @@
  * @module lib/file-utils
  */
 
-import { writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -29,11 +29,11 @@ export function ensureDir(dirPath) {
 export function saveMetrics(metrics) {
   const metricsDir = join(baseDir, 'metrics');
   ensureDir(metricsDir);
-  
+
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
   const filename = `metrics-${timestamp}.json`;
   const filepath = join(metricsDir, filename);
-  
+
   writeFileSync(filepath, JSON.stringify(metrics, null, 2), 'utf8');
   return filepath;
 }
@@ -46,11 +46,11 @@ export function saveMetrics(metrics) {
 export function saveAnalysis(content) {
   const analysisDir = join(baseDir, 'analysis');
   ensureDir(analysisDir);
-  
+
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
   const filename = `log-insights-${timestamp}.md`;
   const filepath = join(analysisDir, filename);
-  
+
   writeFileSync(filepath, content, 'utf8');
   return filepath;
 }
@@ -64,11 +64,11 @@ export function saveAnalysis(content) {
 export function saveIncident(incidentId, content) {
   const incidentsDir = join(baseDir, 'incidents');
   ensureDir(incidentsDir);
-  
+
   const date = new Date().toISOString().split('T')[0];
   const filename = `${date}-${incidentId}.md`;
   const filepath = join(incidentsDir, filename);
-  
+
   writeFileSync(filepath, content, 'utf8');
   return filepath;
 }
@@ -82,11 +82,11 @@ export function saveIncident(incidentId, content) {
 export function saveReport(reportType, content) {
   const reportsDir = join(baseDir, 'reports');
   ensureDir(reportsDir);
-  
+
   const date = new Date().toISOString().split('T')[0];
   const filename = `ops-report-${reportType}-${date}.md`;
   const filepath = join(reportsDir, filename);
-  
+
   writeFileSync(filepath, content, 'utf8');
   return filepath;
 }
@@ -98,14 +98,14 @@ export function saveReport(reportType, content) {
 export function getLatestMetrics() {
   const metricsDir = join(baseDir, 'metrics');
   if (!existsSync(metricsDir)) return null;
-  
+
   const files = readdirSync(metricsDir)
-    .filter(f => f.startsWith('metrics-') && f.endsWith('.json'))
+    .filter((f) => f.startsWith('metrics-') && f.endsWith('.json'))
     .sort()
     .reverse();
-  
+
   if (files.length === 0) return null;
-  
+
   const latestFile = join(metricsDir, files[0]);
   const data = readFileSync(latestFile, 'utf8');
   return JSON.parse(data);
@@ -119,23 +119,23 @@ export function getLatestMetrics() {
 export function getRecentMetrics(hours = 24) {
   const metricsDir = join(baseDir, 'metrics');
   if (!existsSync(metricsDir)) return [];
-  
-  const cutoffTime = Date.now() - (hours * 60 * 60 * 1000);
+
+  const cutoffTime = Date.now() - hours * 60 * 60 * 1000;
   const files = readdirSync(metricsDir)
-    .filter(f => f.startsWith('metrics-') && f.endsWith('.json'))
+    .filter((f) => f.startsWith('metrics-') && f.endsWith('.json'))
     .sort()
     .reverse();
-  
+
   const recentMetrics = [];
   for (const file of files) {
     const filepath = join(metricsDir, file);
     const data = readFileSync(filepath, 'utf8');
     const metrics = JSON.parse(data);
-    
+
     if (new Date(metrics.timestamp).getTime() < cutoffTime) break;
     recentMetrics.push(metrics);
   }
-  
+
   return recentMetrics;
 }
 

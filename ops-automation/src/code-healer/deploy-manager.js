@@ -17,12 +17,7 @@ class DeployManager {
    * 핫픽스 배포
    */
   async deployHotfix(options) {
-    const {
-      patch,
-      repository,
-      strategy = 'canary',
-      autoRollback = true
-    } = options;
+    const { patch, repository, strategy = 'canary', autoRollback = true } = options;
 
     const deploymentId = this.generateDeploymentId();
 
@@ -63,7 +58,7 @@ class DeployManager {
       return deployment;
     } catch (err) {
       logger.error(`핫픽스 배포 실패: ${deploymentId}`, err);
-      
+
       deployment.status = 'failed';
       deployment.error = err.message;
 
@@ -129,12 +124,11 @@ class DeployManager {
         if (stage.waitTime) {
           await this.sleep(stage.waitTime);
         }
-
       } catch (err) {
         stageResult.status = 'failed';
         stageResult.error = err.message;
         stageResult.completedAt = new Date().toISOString();
-        
+
         throw err;
       }
     }
@@ -248,15 +242,12 @@ class DeployManager {
           options: { parallel: true, timeout: 10000 }
         });
 
-        const allHealthy = results.results.every(r => 
-          r.success && r.exitCode === 0
-        );
+        const allHealthy = results.results.every((r) => r.success && r.exitCode === 0);
 
         if (allHealthy) {
           logger.info(`헬스 체크 성공: ${stage.name}`);
           return true;
         }
-
       } catch (err) {
         logger.warn(`헬스 체크 실패 (시도 ${attempts + 1}/${maxAttempts})`, err);
       }
@@ -274,7 +265,7 @@ class DeployManager {
   async monitorMetrics(stage, duration) {
     logger.info(`메트릭 모니터링 시작: ${duration}ms`);
 
-    const startTime = Date.now();
+    const _startTime = Date.now();
     const metrics = {
       errorRate: [],
       responseTime: [],
@@ -287,7 +278,7 @@ class DeployManager {
 
     for (let i = 0; i < samples; i++) {
       const sample = await this.collectMetrics(stage);
-      
+
       metrics.errorRate.push(sample.errorRate);
       metrics.responseTime.push(sample.responseTime);
       metrics.cpu.push(sample.cpu);
@@ -313,7 +304,7 @@ class DeployManager {
 
     // 실제로는 Prometheus, CloudWatch 등에서 수집
     // 여기서는 SSH로 간단히 수집
-    const result = await this.sshExecutor.execute({
+    const _result = await this.sshExecutor.execute({
       target: targets[0], // 첫 번째 서버만
       command: 'top -bn1 | grep Cpu; free -m | grep Mem',
       options: { timeout: 5000 }
@@ -331,7 +322,7 @@ class DeployManager {
   /**
    * 메트릭 검증
    */
-  validateMetrics(metrics, stage) {
+  validateMetrics(metrics, _stage) {
     const thresholds = this.config.thresholds;
 
     if (metrics.errorRate > thresholds.maxErrorRate) {
@@ -368,12 +359,12 @@ class DeployManager {
   /**
    * 배포 준비
    */
-  async prepareDeployment(deployment) {
+  async prepareDeployment(_deployment) {
     logger.info('배포 준비 중...');
-    
+
     // Git 커밋, 태그 생성 등
     // 실제로는 CI/CD 파이프라인과 연동
-    
+
     await this.sleep(1000);
   }
 
@@ -384,7 +375,7 @@ class DeployManager {
     logger.info(`백업 생성: ${stage.name}`);
 
     const timestamp = Date.now();
-    
+
     await this.sshExecutor.execute({
       target: targets,
       command: `mkdir -p /tmp/backup-${timestamp} && cp -r /app /tmp/backup-${timestamp}/`,
@@ -397,12 +388,12 @@ class DeployManager {
    */
   async uploadPatchedFile(targets, change) {
     logger.info(`파일 업로드: ${change.file}`);
-    
+
     // 실제로는 SCP, rsync 등 사용
     // 여기서는 SSH로 간단히 구현
-    
+
     const content = change.patched.replace(/'/g, "\\'");
-    
+
     await this.sshExecutor.execute({
       target: targets,
       command: `echo '${content}' > ${change.file}`,
@@ -429,7 +420,7 @@ class DeployManager {
   /**
    * 배포 확인
    */
-  async verifyDeployment(targets, patch) {
+  async verifyDeployment(_targets, _patch) {
     logger.info('배포 확인 중...');
 
     // 파일 체크섬 확인 등
@@ -444,7 +435,7 @@ class DeployManager {
 
     // 로드 밸런서 설정 변경
     // Nginx, HAProxy, AWS ELB 등
-    
+
     await this.sleep(2000);
   }
 
@@ -459,12 +450,12 @@ class DeployManager {
   /**
    * 승인 요청
    */
-  async requestApproval(deployment, stage) {
+  async requestApproval(_deployment, stage) {
     logger.warn(`승인 필요: ${stage.name} 배포`);
-    
+
     // 실제로는 Slack, Email 등으로 알림 후 승인 대기
     // 여기서는 자동 승인
-    
+
     return false; // 수동 승인 필요
   }
 
@@ -473,7 +464,7 @@ class DeployManager {
    */
   async rollback(deploymentId, reason) {
     const deployment = this.deployments.get(deploymentId);
-    
+
     if (!deployment) {
       throw new Error(`배포를 찾을 수 없음: ${deploymentId}`);
     }
@@ -481,7 +472,7 @@ class DeployManager {
     logger.warn(`롤백 시작: ${deploymentId} (${reason})`);
 
     // 롤백 로직은 별도 파일 (rollback.js)에 구현됨
-    
+
     deployment.status = 'rolled_back';
     deployment.rollbackReason = reason;
   }
@@ -498,16 +489,14 @@ class DeployManager {
    * 평균 계산
    */
   average(arr) {
-    return arr.length > 0 
-      ? parseFloat((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2))
-      : 0;
+    return arr.length > 0 ? parseFloat((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2)) : 0;
   }
 
   /**
    * 대기
    */
   sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**

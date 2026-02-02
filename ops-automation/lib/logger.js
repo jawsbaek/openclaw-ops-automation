@@ -3,10 +3,10 @@
  * @module lib/logger
  */
 
+import { existsSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import winston from 'winston';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -37,17 +37,17 @@ export function createLogger(agentName) {
         format: winston.format.combine(
           winston.format.colorize(),
           winston.format.printf(({ timestamp, level, message, agent, ...meta }) => {
-            let metaStr = Object.keys(meta).length ? JSON.stringify(meta) : '';
+            const metaStr = Object.keys(meta).length ? JSON.stringify(meta) : '';
             return `${timestamp} [${agent}] ${level}: ${message} ${metaStr}`;
           })
         )
       }),
-      new winston.transports.File({ 
+      new winston.transports.File({
         filename: join(logsDir, `${agentName}.log`),
         maxsize: 5242880,
         maxFiles: 5
       }),
-      new winston.transports.File({ 
+      new winston.transports.File({
         filename: join(logsDir, `${agentName}-error.log`),
         level: 'error',
         maxsize: 5242880,

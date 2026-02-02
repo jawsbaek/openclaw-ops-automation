@@ -3,10 +3,10 @@
  * @module agents/logs-analyzer
  */
 
-import { readFileSync, existsSync } from 'fs';
-import { createLogger } from '../lib/logger.js';
+import { existsSync, readFileSync } from 'node:fs';
 import { loadMonitoringSources } from '../lib/config-loader.js';
 import { saveAnalysis } from '../lib/file-utils.js';
+import { createLogger } from '../lib/logger.js';
 
 const logger = createLogger('logs-analyzer');
 
@@ -40,7 +40,7 @@ function readLogFile(logPath, tailLines = 1000) {
 
   try {
     const content = readFileSync(logPath, 'utf8');
-    
+
     if (tailLines === 0) {
       return content;
     }
@@ -77,7 +77,7 @@ function analyzePatterns(content) {
       findings.bySeverity[errorDef.severity] += count;
       findings.byCategory[errorDef.category] = (findings.byCategory[errorDef.category] || 0) + count;
 
-      const sampleLines = lines.filter(line => errorDef.pattern.test(line)).slice(0, 3);
+      const sampleLines = lines.filter((line) => errorDef.pattern.test(line)).slice(0, 3);
       if (sampleLines.length > 0) {
         findings.samples.push({
           category: errorDef.category,
@@ -99,10 +99,10 @@ function analyzePatterns(content) {
  */
 function detectAnomalies(content) {
   const anomalies = [];
-  const lines = content.split('\n').filter(l => l.trim());
+  const lines = content.split('\n').filter((l) => l.trim());
 
   const errorCounts = {};
-  lines.forEach(line => {
+  lines.forEach((line) => {
     if (/error|ERROR|Error/i.test(line)) {
       const normalized = line.replace(/\d{4}-\d{2}-\d{2}.*?\s/, '').slice(0, 100);
       errorCounts[normalized] = (errorCounts[normalized] || 0) + 1;
@@ -120,7 +120,7 @@ function detectAnomalies(content) {
     }
   });
 
-  const recentErrors = lines.filter(l => /error|ERROR|Error/i.test(l)).slice(-50);
+  const recentErrors = lines.filter((l) => /error|ERROR|Error/i.test(l)).slice(-50);
   if (recentErrors.length > 30) {
     anomalies.push({
       type: 'error_burst',
@@ -145,13 +145,13 @@ function generateReport(results) {
   report += `## Summary\n\n`;
 
   let totalFindings = 0;
-  results.forEach(r => totalFindings += r.findings.total);
+  results.forEach((r) => (totalFindings += r.findings.total));
 
   report += `- **Total Issues Found:** ${totalFindings}\n`;
   report += `- **Log Files Analyzed:** ${results.length}\n\n`;
 
   const overallSeverity = { critical: 0, error: 0, warning: 0 };
-  results.forEach(r => {
+  results.forEach((r) => {
     overallSeverity.critical += r.findings.bySeverity.critical;
     overallSeverity.error += r.findings.bySeverity.error;
     overallSeverity.warning += r.findings.bySeverity.warning;
@@ -162,7 +162,7 @@ function generateReport(results) {
   report += `- 🟠 Error: ${overallSeverity.error}\n`;
   report += `- 🟡 Warning: ${overallSeverity.warning}\n\n`;
 
-  const allAnomalies = results.flatMap(r => r.anomalies);
+  const allAnomalies = results.flatMap((r) => r.anomalies);
   if (allAnomalies.length > 0) {
     report += `## ⚠️ Anomalies Detected\n\n`;
     allAnomalies.forEach((anomaly, idx) => {
@@ -173,16 +173,16 @@ function generateReport(results) {
   }
 
   report += `## Detailed Findings\n\n`;
-  results.forEach(result => {
+  results.forEach((result) => {
     report += `### ${result.logFile}\n\n`;
-    
+
     if (result.findings.total === 0) {
       report += `✅ No issues found.\n\n`;
       return;
     }
 
     report += `**Total Issues:** ${result.findings.total}\n\n`;
-    
+
     const categories = Object.entries(result.findings.byCategory);
     if (categories.length > 0) {
       report += `**By Category:**\n\n`;
@@ -194,7 +194,7 @@ function generateReport(results) {
 
     if (result.findings.samples.length > 0) {
       report += `**Sample Errors:**\n\n`;
-      result.findings.samples.slice(0, 5).forEach(sample => {
+      result.findings.samples.slice(0, 5).forEach((sample) => {
         report += `**${sample.category}** (${sample.severity}, count: ${sample.count}):\n`;
         report += `\`\`\`\n${sample.examples[0]}\n\`\`\`\n\n`;
       });
@@ -202,16 +202,16 @@ function generateReport(results) {
   });
 
   report += `## Recommendations\n\n`;
-  
+
   if (overallSeverity.critical > 0) {
     report += `- 🔴 **URGENT**: ${overallSeverity.critical} critical issues require immediate attention\n`;
   }
-  
-  if (allAnomalies.some(a => a.type === 'error_burst')) {
+
+  if (allAnomalies.some((a) => a.type === 'error_burst')) {
     report += `- ⚠️ Error burst detected - investigate for system issues\n`;
   }
-  
-  if (allAnomalies.some(a => a.type === 'repeated_error')) {
+
+  if (allAnomalies.some((a) => a.type === 'repeated_error')) {
     report += `- 🔁 Repeated errors detected - may indicate persistent bug or configuration issue\n`;
   }
 
@@ -237,7 +237,7 @@ export async function analyzeLogs() {
 
   for (const logPath of logPaths) {
     logger.info(`Analyzing log: ${logPath}`);
-    
+
     const content = readLogFile(logPath, 1000);
     if (!content) continue;
 
@@ -277,7 +277,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       logger.info('Log analysis completed');
       process.exit(0);
     })
-    .catch(error => {
+    .catch((error) => {
       logger.error('Log analysis failed', { error: error.message, stack: error.stack });
       process.exit(1);
     });

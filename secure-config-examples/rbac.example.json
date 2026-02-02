@@ -2,13 +2,7 @@
   "roles": {
     "viewer": {
       "description": "Read-only access to metrics, logs, and reports",
-      "permissions": [
-        "read:metrics",
-        "read:logs",
-        "read:reports",
-        "read:incidents",
-        "read:dashboard"
-      ]
+      "permissions": ["read:metrics", "read:logs", "read:reports", "read:incidents", "read:dashboard"]
     },
     "operator": {
       "description": "Can execute safe commands and spawn monitoring agents",
@@ -36,9 +30,7 @@
     },
     "admin": {
       "description": "Full access to all operations including destructive actions",
-      "permissions": [
-        "*"
-      ]
+      "permissions": ["*"]
     }
   },
   "assignments": {
@@ -56,21 +48,12 @@
   "policies": {
     "approval_required": {
       "description": "Actions that require manual approval",
-      "actions": [
-        "execute:restart_openclaw",
-        "execute:database_operations",
-        "execute:destructive_cleanup"
-      ],
+      "actions": ["execute:restart_openclaw", "execute:database_operations", "execute:destructive_cleanup"],
       "approvers": ["admin"]
     },
     "audit_required": {
       "description": "Actions that must be logged to audit trail",
-      "actions": [
-        "execute:*",
-        "spawn:autoheal",
-        "approve:*",
-        "rbac:*"
-      ]
+      "actions": ["execute:*", "spawn:autoheal", "approve:*", "rbac:*"]
     },
     "rate_limits": {
       "description": "Rate limits per role",

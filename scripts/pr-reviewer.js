@@ -5,9 +5,9 @@
  * Analyzes code changes and provides intelligent feedback
  */
 
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+const fs = require('node:fs');
+const _path = require('node:path');
+const { execSync } = require('node:child_process');
 
 // Review criteria with weights
 const REVIEW_CRITERIA = {
@@ -41,35 +41,35 @@ class PRReviewer {
 
   async run() {
     console.log(`🔍 Starting AI code review for PR #${this.prNumber}...`);
-    
+
     const scores = {
       code_quality: 0,
       security: 0,
       performance: 0,
       maintainability: 0
     };
-    
+
     const comments = [];
 
     // Analyze each changed file
     for (const file of this.files.split(' ')) {
       if (!file || this.shouldSkipFile(file)) continue;
-      
+
       console.log(`📄 Reviewing: ${file}`);
       const fileReview = await this.reviewFile(file);
-      
+
       // Aggregate scores
-      Object.keys(scores).forEach(category => {
+      Object.keys(scores).forEach((category) => {
         scores[category] += fileReview.scores[category] || 0;
       });
-      
+
       comments.push(...fileReview.comments);
     }
 
     // Calculate weighted total score
-    const fileCount = this.files.split(' ').filter(f => f && !this.shouldSkipFile(f)).length;
+    const fileCount = this.files.split(' ').filter((f) => f && !this.shouldSkipFile(f)).length;
     const totalScore = this.calculateTotalScore(scores, fileCount);
-    
+
     console.log(`\n📊 Review Scores:`);
     console.log(`   Code Quality: ${(scores.code_quality / fileCount).toFixed(1)}/10`);
     console.log(`   Security: ${(scores.security / fileCount).toFixed(1)}/10`);
@@ -95,11 +95,11 @@ class PRReviewer {
     };
 
     fs.writeFileSync('review-results.json', JSON.stringify(results, null, 2));
-    
+
     console.log(`\n${results.approved ? '✅' : '❌'} Review complete!`);
     console.log(`   Score: ${totalScore.toFixed(1)}/10`);
     console.log(`   Status: ${results.approved ? 'APPROVED' : 'NEEDS IMPROVEMENT'}`);
-    
+
     process.exit(results.approved ? 0 : 1);
   }
 
@@ -114,8 +114,8 @@ class PRReviewer {
       /build\//,
       /coverage\//
     ];
-    
-    return skipPatterns.some(pattern => pattern.test(file));
+
+    return skipPatterns.some((pattern) => pattern.test(file));
   }
 
   async reviewFile(file) {
@@ -125,12 +125,12 @@ class PRReviewer {
       performance: 8,
       maintainability: 8
     };
-    
+
     const comments = [];
 
     try {
       const content = fs.readFileSync(file, 'utf-8');
-      
+
       // Code Quality Checks
       const qualityIssues = this.checkCodeQuality(content, file);
       if (qualityIssues.length > 0) {
@@ -158,7 +158,6 @@ class PRReviewer {
         scores.maintainability = Math.max(6, 10 - maintIssues.length);
         comments.push(...maintIssues);
       }
-
     } catch (error) {
       console.error(`⚠️ Error reviewing ${file}: ${error.message}`);
     }
@@ -171,7 +170,7 @@ class PRReviewer {
 
     // Check for long functions (>50 lines)
     const functionMatches = content.match(/function\s+\w+\s*\([^)]*\)\s*{[\s\S]*?}\s*}/g) || [];
-    functionMatches.forEach(func => {
+    functionMatches.forEach((func) => {
       const lines = func.split('\n').length;
       if (lines > 50) {
         issues.push({
@@ -242,8 +241,8 @@ class PRReviewer {
       /api[_-]?key\s*=\s*["'][^"']+["']/i,
       /secret\s*=\s*["'][^"']+["']/i
     ];
-    
-    credPatterns.forEach(pattern => {
+
+    credPatterns.forEach((pattern) => {
       if (pattern.test(content)) {
         issues.push({
           file,
@@ -274,7 +273,7 @@ class PRReviewer {
 
     // Check for synchronous file operations
     const syncOps = ['readFileSync', 'writeFileSync', 'existsSync'];
-    syncOps.forEach(op => {
+    syncOps.forEach((op) => {
       if (content.includes(op) && !file.includes('test')) {
         issues.push({
           file,
@@ -307,7 +306,7 @@ class PRReviewer {
     // Check for missing JSDoc on exported functions
     const exportedFunctions = content.match(/export\s+(async\s+)?function\s+\w+/g) || [];
     const jsdocCount = (content.match(/\/\*\*[\s\S]*?\*\//g) || []).length;
-    
+
     if (exportedFunctions.length > jsdocCount + 2) {
       issues.push({
         file,
@@ -341,7 +340,7 @@ class PRReviewer {
 
   calculateTotalScore(scores, fileCount) {
     if (fileCount === 0) return 0;
-    
+
     const avgScores = {
       code_quality: scores.code_quality / fileCount,
       security: scores.security / fileCount,
@@ -350,7 +349,7 @@ class PRReviewer {
     };
 
     let totalScore = 0;
-    Object.keys(REVIEW_CRITERIA).forEach(category => {
+    Object.keys(REVIEW_CRITERIA).forEach((category) => {
       const weight = REVIEW_CRITERIA[category].weight / 100;
       totalScore += avgScores[category] * weight;
     });
@@ -369,7 +368,7 @@ class PRReviewer {
     }
 
     const summaryComment = this.generateSummaryComment(comments, totalScore);
-    
+
     console.log('\n📝 Review Summary:');
     console.log(summaryComment);
 
@@ -380,26 +379,26 @@ class PRReviewer {
 
   generateSummaryComment(comments, totalScore) {
     const emoji = totalScore >= 8 ? '✅' : totalScore >= 6 ? '⚠️' : '❌';
-    
+
     let summary = `## ${emoji} AI Code Review Results\n\n`;
     summary += `**Overall Score: ${totalScore.toFixed(1)}/10**\n\n`;
-    
+
     if (comments.length === 0) {
       summary += '🎉 No issues found! Great work!\n\n';
     } else {
       summary += `### Issues Found (${comments.length})\n\n`;
-      
+
       const byCategory = {};
-      comments.forEach(comment => {
+      comments.forEach((comment) => {
         if (!byCategory[comment.category]) {
           byCategory[comment.category] = [];
         }
         byCategory[comment.category].push(comment);
       });
 
-      Object.keys(byCategory).forEach(category => {
+      Object.keys(byCategory).forEach((category) => {
         summary += `#### ${category.replace('_', ' ').toUpperCase()}\n\n`;
-        byCategory[category].forEach(comment => {
+        byCategory[category].forEach((comment) => {
           summary += `- [${comment.severity.toUpperCase()}] ${comment.file}:${comment.line}\n`;
           summary += `  ${comment.message}\n\n`;
         });
@@ -407,9 +406,10 @@ class PRReviewer {
     }
 
     summary += '\n---\n';
-    summary += totalScore >= 8 
-      ? '✅ **Recommendation:** APPROVE - Ready for merge\n'
-      : '⚠️ **Recommendation:** REQUEST CHANGES - Please address the issues above\n';
+    summary +=
+      totalScore >= 8
+        ? '✅ **Recommendation:** APPROVE - Ready for merge\n'
+        : '⚠️ **Recommendation:** REQUEST CHANGES - Please address the issues above\n';
 
     return summary;
   }
@@ -420,7 +420,7 @@ if (require.main === module) {
   const args = process.argv.slice(2);
   const options = {};
 
-  args.forEach(arg => {
+  args.forEach((arg) => {
     const [key, value] = arg.split('=');
     const cleanKey = key.replace(/^--/, '').replace(/-/g, '_');
     options[cleanKey] = value || true;
@@ -433,7 +433,7 @@ if (require.main === module) {
     securityPassed: options.security_passed
   });
 
-  reviewer.run().catch(error => {
+  reviewer.run().catch((error) => {
     console.error('❌ Review failed:', error);
     process.exit(1);
   });

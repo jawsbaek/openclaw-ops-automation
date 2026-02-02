@@ -12,7 +12,7 @@ function greetUser(name) {
   if (!name) {
     throw new Error('Name is required');
   }
-  
+
   return `Hello, ${name}! Welcome to the PR automation system.`;
 }
 
@@ -25,7 +25,7 @@ function calculateSum(numbers) {
   if (!Array.isArray(numbers)) {
     throw new Error('Input must be an array');
   }
-  
+
   return numbers.reduce((sum, num) => sum + num, 0);
 }
 
@@ -36,13 +36,13 @@ function calculateSum(numbers) {
  */
 function canAutoMerge(pr) {
   const criteria = {
-    allChecksPassed: pr.checks.every(check => check.status === 'success'),
+    allChecksPassed: pr.checks.every((check) => check.status === 'success'),
     noConflicts: !pr.hasConflicts,
     minApprovals: pr.approvals >= 1,
     aiScore: pr.aiReviewScore >= 8,
     securityClean: pr.securityScan.passed
   };
-  
+
   return Object.values(criteria).every(Boolean);
 }
 

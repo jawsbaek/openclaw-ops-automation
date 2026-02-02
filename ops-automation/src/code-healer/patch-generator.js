@@ -3,8 +3,8 @@
  * 진단 결과를 기반으로 자동 패치 생성
  */
 
-const fs = require('fs').promises;
-const path = require('path');
+const fs = require('node:fs').promises;
+const _path = require('node:path');
 const logger = require('../../lib/logger');
 
 class PatchGenerator {
@@ -23,14 +23,14 @@ class PatchGenerator {
 
     // 패턴 매칭
     const pattern = this.findMatchingPattern(type, evidence);
-    
+
     if (!pattern) {
       throw new Error(`패치 패턴을 찾을 수 없음: ${type}`);
     }
 
     // 파일별 패치 생성
     const patches = [];
-    
+
     for (const file of affectedFiles) {
       const filePatch = await this.generateFilePatch(file, pattern, evidence);
       if (filePatch) {
@@ -70,9 +70,7 @@ class PatchGenerator {
       }
 
       // 각 위치에 대한 수정 생성
-      const changes = issueLocations.map(location => 
-        this.applyPattern(lines, location, pattern)
-      );
+      const changes = issueLocations.map((location) => this.applyPattern(lines, location, pattern));
 
       // 수정된 내용 생성
       const patchedContent = this.applyChanges(lines, changes);
@@ -81,7 +79,7 @@ class PatchGenerator {
         file: filePath,
         original: content,
         patched: patchedContent,
-        changes: changes.map(c => ({
+        changes: changes.map((c) => ({
           line: c.lineNumber,
           type: c.type,
           original: c.original,
@@ -97,7 +95,7 @@ class PatchGenerator {
   /**
    * 문제 위치 찾기
    */
-  findIssueLocations(lines, pattern, evidence) {
+  findIssueLocations(lines, pattern, _evidence) {
     const locations = [];
 
     for (let i = 0; i < lines.length; i++) {
@@ -106,11 +104,11 @@ class PatchGenerator {
       // 패턴 매칭
       for (const detector of pattern.detectors) {
         const regex = new RegExp(detector.pattern);
-        
+
         if (regex.test(line)) {
           // 컨텍스트 확인 (주변 라인)
           const context = this.getContext(lines, i, 5);
-          
+
           if (this.validateContext(context, detector.context)) {
             locations.push({
               lineNumber: i + 1,
@@ -136,19 +134,19 @@ class PatchGenerator {
     switch (fix.type) {
       case 'wrap_try_finally':
         return this.wrapTryFinally(lines, lineNumber, fix);
-      
+
       case 'add_error_handling':
         return this.addErrorHandling(lines, lineNumber, fix);
-      
+
       case 'add_cleanup':
         return this.addCleanup(lines, lineNumber, fix);
-      
+
       case 'add_timeout':
         return this.addTimeout(lines, lineNumber, fix);
-      
+
       case 'replace_cache':
         return this.replaceCache(lines, lineNumber, fix);
-      
+
       default:
         throw new Error(`알 수 없는 패치 타입: ${fix.type}`);
     }
@@ -223,21 +221,15 @@ class PatchGenerator {
    */
   addTimeout(lines, lineNumber, fix) {
     const line = lines[lineNumber - 1];
-    const indent = this.getIndent(line);
+    const _indent = this.getIndent(line);
 
     // fetch, axios 등의 호출에 타임아웃 추가
     let modified = line;
-    
+
     if (line.includes('fetch(')) {
-      modified = line.replace(
-        /fetch\(([^)]+)\)/,
-        `fetch($1, { signal: AbortSignal.timeout(${fix.timeoutMs}) })`
-      );
+      modified = line.replace(/fetch\(([^)]+)\)/, `fetch($1, { signal: AbortSignal.timeout(${fix.timeoutMs}) })`);
     } else if (line.includes('axios.')) {
-      modified = line.replace(
-        /axios\.(\w+)\(([^)]+)\)/,
-        `axios.$1($2, { timeout: ${fix.timeoutMs} })`
-      );
+      modified = line.replace(/axios\.(\w+)\(([^)]+)\)/, `axios.$1($2, { timeout: ${fix.timeoutMs} })`);
     }
 
     return {
@@ -251,11 +243,11 @@ class PatchGenerator {
   /**
    * 캐시 교체 (unbounded -> LRU)
    */
-  replaceCache(lines, lineNumber, fix) {
+  replaceCache(lines, _lineNumber, fix) {
     const changes = [];
 
     // 1. 캐시 선언 찾기
-    const cacheDecl = lines.findIndex(l => l.includes('const cache = {}'));
+    const cacheDecl = lines.findIndex((l) => l.includes('const cache = {}'));
     if (cacheDecl >= 0) {
       changes.push({
         type: 'replace',
@@ -271,7 +263,7 @@ class PatchGenerator {
         const modified = lines[i]
           .replace(/cache\[([^\]]+)\]/g, 'cache.get($1)')
           .replace(/cache\.get\(([^)]+)\)\s*=/, 'cache.set($1,');
-        
+
         if (modified !== lines[i]) {
           changes.push({
             type: 'replace',
@@ -302,15 +294,16 @@ class PatchGenerator {
         case 'replace':
           newLines[idx] = change.modified;
           break;
-        
+
         case 'insert':
           newLines.splice(idx + 1, 0, change.modified);
           break;
-        
-        case 'wrap':
+
+        case 'wrap': {
           const wrappedLines = change.modified.split('\n');
           newLines.splice(change.start, change.end - change.start + 1, ...wrappedLines);
           break;
+        }
       }
     }
 
@@ -324,10 +317,8 @@ class PatchGenerator {
     for (const pattern of this.patterns) {
       if (pattern.types.includes(issueType)) {
         // 증거와 패턴 매칭
-        const matches = evidence.some(e => 
-          pattern.keywords.some(k => e.toLowerCase().includes(k.toLowerCase()))
-        );
-        
+        const matches = evidence.some((e) => pattern.keywords.some((k) => e.toLowerCase().includes(k.toLowerCase())));
+
         if (matches) {
           return pattern;
         }
@@ -352,9 +343,7 @@ class PatchGenerator {
   validateContext(context, requirements) {
     if (!requirements) return true;
 
-    return requirements.every(req => 
-      context.some(line => line.includes(req))
-    );
+    return requirements.every((req) => context.some((line) => line.includes(req)));
   }
 
   /**
@@ -371,8 +360,7 @@ class PatchGenerator {
   findBlockStart(lines, fromLine) {
     // 간단 구현: 현재 라인 또는 이전 함수 시작
     for (let i = fromLine; i >= 0; i--) {
-      if (lines[i].trim().startsWith('function') || 
-          lines[i].trim().startsWith('async function')) {
+      if (lines[i].trim().startsWith('function') || lines[i].trim().startsWith('async function')) {
         return i + 1; // 함수 선언 다음 줄부터
       }
     }
@@ -396,11 +384,11 @@ class PatchGenerator {
    * 신뢰도 계산
    */
   calculateConfidence(pattern, evidence) {
-    const keywordMatches = evidence.filter(e =>
-      pattern.keywords.some(k => e.toLowerCase().includes(k.toLowerCase()))
+    const keywordMatches = evidence.filter((e) =>
+      pattern.keywords.some((k) => e.toLowerCase().includes(k.toLowerCase()))
     ).length;
 
-    const confidence = Math.min(0.5 + (keywordMatches * 0.15), 0.95);
+    const confidence = Math.min(0.5 + keywordMatches * 0.15, 0.95);
     return parseFloat(confidence.toFixed(2));
   }
 

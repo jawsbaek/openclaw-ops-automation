@@ -36,31 +36,25 @@ describe('PR Automation Example', () => {
   describe('canAutoMerge', () => {
     it('should return true when all criteria are met', () => {
       const pr = {
-        checks: [
-          { status: 'success' },
-          { status: 'success' }
-        ],
+        checks: [{ status: 'success' }, { status: 'success' }],
         hasConflicts: false,
         approvals: 2,
         aiReviewScore: 9,
         securityScan: { passed: true }
       };
-      
+
       expect(canAutoMerge(pr)).toBe(true);
     });
 
     it('should return false when checks fail', () => {
       const pr = {
-        checks: [
-          { status: 'success' },
-          { status: 'failure' }
-        ],
+        checks: [{ status: 'success' }, { status: 'failure' }],
         hasConflicts: false,
         approvals: 2,
         aiReviewScore: 9,
         securityScan: { passed: true }
       };
-      
+
       expect(canAutoMerge(pr)).toBe(false);
     });
 
@@ -72,7 +66,7 @@ describe('PR Automation Example', () => {
         aiReviewScore: 6,
         securityScan: { passed: true }
       };
-      
+
       expect(canAutoMerge(pr)).toBe(false);
     });
 
@@ -84,7 +78,7 @@ describe('PR Automation Example', () => {
         aiReviewScore: 9,
         securityScan: { passed: false }
       };
-      
+
       expect(canAutoMerge(pr)).toBe(false);
     });
   });

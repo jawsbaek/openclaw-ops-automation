@@ -39,14 +39,7 @@
     "reboot",
     "shutdown"
   ],
-  "forbidden": [
-    "rm -rf /",
-    "dd if=/dev/zero",
-    "mkfs",
-    "fdisk",
-    "parted",
-    ":(){:|:&};:"
-  ],
+  "forbidden": ["rm -rf /", "dd if=/dev/zero", "mkfs", "fdisk", "parted", ":(){:|:&};:"],
   "commandLimits": {
     "maxOutputSize": 10485760,
     "maxExecutionTime": 300000,

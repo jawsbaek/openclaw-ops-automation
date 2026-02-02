@@ -28,7 +28,7 @@ class LogCollector {
     logger.info(`로그 수집 시작: ${logPath} from ${targets.join(', ')}`);
 
     const commands = this.buildLogCommands(logPath, timeRange, filters, maxSize);
-    
+
     const results = await this.sshExecutor.execute({
       target: targets,
       command: commands.collect,
@@ -60,13 +60,7 @@ class LogCollector {
    * 특정 패턴 검색
    */
   async search(options) {
-    const {
-      targets,
-      logPath,
-      pattern,
-      timeRange,
-      contextLines = 3
-    } = options;
+    const { targets, logPath, pattern, timeRange, contextLines = 3 } = options;
 
     const grepCommand = this.buildGrepCommand(logPath, pattern, timeRange, contextLines);
 
@@ -83,16 +77,7 @@ class LogCollector {
    * 에러 로그 추출
    */
   async collectErrors(targets, logPath, since = '1 hour ago') {
-    const errorPatterns = [
-      'ERROR',
-      'FATAL',
-      'Exception',
-      'Error:',
-      'failed',
-      'timeout',
-      'cannot',
-      'unable to'
-    ];
+    const errorPatterns = ['ERROR', 'FATAL', 'Exception', 'Error:', 'failed', 'timeout', 'cannot', 'unable to'];
 
     const pattern = errorPatterns.join('\\|');
     const command = `journalctl --since "${since}" | grep -iE "${pattern}" || tail -1000 ${logPath} | grep -iE "${pattern}"`;
@@ -128,9 +113,9 @@ class LogCollector {
         });
 
         if (result.success && result.results[0].stdout) {
-          const lines = result.results[0].stdout.split('\n').filter(l => l.trim());
+          const lines = result.results[0].stdout.split('\n').filter((l) => l.trim());
           lastLines += lines.length;
-          
+
           if (lines.length > 0 && onData) {
             onData(lines);
           }
@@ -175,7 +160,7 @@ class LogCollector {
 
     return {
       collect: command,
-      count: command + ' | wc -l'
+      count: `${command} | wc -l`
     };
   }
 
@@ -190,9 +175,9 @@ class LogCollector {
       if (timeRange.until) {
         command += ` --until "${timeRange.until}"`;
       }
-      command += ` | grep -i${contextLines > 0 ? 'A' + contextLines + ' -B' + contextLines : ''} "${pattern}"`;
+      command += ` | grep -i${contextLines > 0 ? `A${contextLines} -B${contextLines}` : ''} "${pattern}"`;
     } else {
-      command = `grep -i${contextLines > 0 ? 'A' + contextLines + ' -B' + contextLines : ''} "${pattern}" ${logPath} | tail -500`;
+      command = `grep -i${contextLines > 0 ? `A${contextLines} -B${contextLines}` : ''} "${pattern}" ${logPath} | tail -500`;
     }
 
     return command;
@@ -210,7 +195,7 @@ class LogCollector {
       }
 
       const lines = result.stdout.split('\n');
-      
+
       for (const line of lines) {
         if (!line.trim()) continue;
 
@@ -273,15 +258,17 @@ class LogCollector {
    * 에러 추출
    */
   extractErrors(logs) {
-    return logs.filter(log => {
+    return logs.filter((log) => {
       const level = (log.level || '').toUpperCase();
       const message = (log.message || '').toLowerCase();
-      
-      return level === 'ERROR' || 
-             level === 'FATAL' || 
-             message.includes('error') ||
-             message.includes('exception') ||
-             message.includes('failed');
+
+      return (
+        level === 'ERROR' ||
+        level === 'FATAL' ||
+        message.includes('error') ||
+        message.includes('exception') ||
+        message.includes('failed')
+      );
     });
   }
 
@@ -297,7 +284,7 @@ class LogCollector {
       }
 
       const lines = result.stdout.split('\n');
-      
+
       for (const line of lines) {
         if (line.includes(pattern)) {
           matches.push({
@@ -329,7 +316,7 @@ class LogCollector {
       }
 
       const lines = result.stdout.split('\n');
-      
+
       for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed) {
