@@ -424,11 +424,303 @@ class Profiler {
   /**
    * 프로파일 비교
    */
-  compareProfiles(_target, _timestamp1, _timestamp2) {
-    // 구현: 두 시점의 프로파일 비교하여 변화 감지
+  compareProfiles(profile1, profile2) {
+    if (!profile1 || !profile2) {
+      return {
+        error: 'Both profiles are required for comparison'
+      };
+    }
+
+    const comparison = {
+      timestamp1: profile1.timestamp,
+      timestamp2: profile2.timestamp,
+      target: profile1.target,
+      changes: {}
+    };
+
+    // CPU 변화 비교
+    if (profile1.cpu?.usage && profile2.cpu?.usage) {
+      const cpuDelta = profile2.cpu.usage.usage - profile1.cpu.usage.usage;
+      comparison.changes.cpu = {
+        usage: {
+          before: profile1.cpu.usage.usage,
+          after: profile2.cpu.usage.usage,
+          delta: cpuDelta,
+          deltaPercent: ((cpuDelta / profile1.cpu.usage.usage) * 100).toFixed(2),
+          trend: cpuDelta > 5 ? 'increasing' : cpuDelta < -5 ? 'decreasing' : 'stable'
+        }
+      };
+
+      if (profile1.cpu.loadAverage && profile2.cpu.loadAverage) {
+        comparison.changes.cpu.loadAverage = {
+          '1min': {
+            before: profile1.cpu.loadAverage['1min'],
+            after: profile2.cpu.loadAverage['1min'],
+            delta: (profile2.cpu.loadAverage['1min'] - profile1.cpu.loadAverage['1min']).toFixed(2)
+          },
+          '5min': {
+            before: profile1.cpu.loadAverage['5min'],
+            after: profile2.cpu.loadAverage['5min'],
+            delta: (profile2.cpu.loadAverage['5min'] - profile1.cpu.loadAverage['5min']).toFixed(2)
+          }
+        };
+      }
+    }
+
+    // 메모리 변화 비교
+    if (profile1.memory?.summary && profile2.memory?.summary) {
+      const memDelta = profile2.memory.summary.usagePercent - profile1.memory.summary.usagePercent;
+      comparison.changes.memory = {
+        usage: {
+          before: profile1.memory.summary.usagePercent,
+          after: profile2.memory.summary.usagePercent,
+          delta: memDelta,
+          trend: memDelta > 5 ? 'increasing' : memDelta < -5 ? 'decreasing' : 'stable'
+        },
+        used: {
+          before: profile1.memory.summary.used,
+          after: profile2.memory.summary.used,
+          delta: profile2.memory.summary.used - profile1.memory.summary.used
+        }
+      };
+    }
+
+    // 디스크 변화 비교
+    if (profile1.disk?.usage && profile2.disk?.usage) {
+      comparison.changes.disk = [];
+      for (const disk1 of profile1.disk.usage) {
+        const disk2 = profile2.disk.usage.find((d) => d.mountPoint === disk1.mountPoint);
+        if (disk2) {
+          const usage1 = parseInt(disk1.usePercent, 10);
+          const usage2 = parseInt(disk2.usePercent, 10);
+          comparison.changes.disk.push({
+            mountPoint: disk1.mountPoint,
+            before: usage1,
+            after: usage2,
+            delta: usage2 - usage1,
+            trend: usage2 > usage1 ? 'increasing' : usage2 < usage1 ? 'decreasing' : 'stable'
+          });
+        }
+      }
+    }
+
+    // 네트워크 변화 비교
+    if (profile1.network?.establishedConnections && profile2.network?.establishedConnections) {
+      const connDelta = profile2.network.establishedConnections - profile1.network.establishedConnections;
+      comparison.changes.network = {
+        connections: {
+          before: profile1.network.establishedConnections,
+          after: profile2.network.establishedConnections,
+          delta: connDelta,
+          deltaPercent: ((connDelta / profile1.network.establishedConnections) * 100).toFixed(2)
+        }
+      };
+    }
+
+    // 병목 지점 변화
+    comparison.bottleneckChanges = {
+      before: profile1.bottlenecks?.length || 0,
+      after: profile2.bottlenecks?.length || 0,
+      new: profile2.bottlenecks?.filter((b2) => !profile1.bottlenecks?.some((b1) => b1.type === b2.type)) || [],
+      resolved: profile1.bottlenecks?.filter((b1) => !profile2.bottlenecks?.some((b2) => b2.type === b1.type)) || []
+    };
+
+    return comparison;
+  }
+
+  /**
+   * 최적화 권장사항 생성
+   */
+  generateRecommendations(profile) {
+    if (!profile) {
+      return {
+        error: 'Profile is required for generating recommendations'
+      };
+    }
+
+    const recommendations = [];
+
+    // CPU 최적화
+    if (profile.cpu?.usage) {
+      const cpuUsage = profile.cpu.usage.usage;
+      if (cpuUsage > 90) {
+        recommendations.push({
+          category: 'cpu',
+          severity: 'critical',
+          issue: `Critical CPU usage: ${cpuUsage.toFixed(2)}%`,
+          recommendations: [
+            'Identify and optimize CPU-intensive processes',
+            'Consider scaling horizontally (add more instances)',
+            'Review application code for CPU bottlenecks',
+            'Implement caching to reduce computation'
+          ],
+          priority: 1
+        });
+      } else if (cpuUsage > 75) {
+        recommendations.push({
+          category: 'cpu',
+          severity: 'high',
+          issue: `High CPU usage: ${cpuUsage.toFixed(2)}%`,
+          recommendations: [
+            'Monitor top CPU-consuming processes',
+            'Consider implementing rate limiting',
+            'Review and optimize inefficient algorithms'
+          ],
+          priority: 2
+        });
+      }
+
+      if (profile.cpu.loadAverage?.['1min'] > 4) {
+        recommendations.push({
+          category: 'cpu',
+          severity: 'high',
+          issue: `High load average: ${profile.cpu.loadAverage['1min']}`,
+          recommendations: [
+            'Check for process queue buildup',
+            'Review concurrent process limits',
+            'Consider upgrading CPU resources'
+          ],
+          priority: 2
+        });
+      }
+    }
+
+    // 메모리 최적화
+    if (profile.memory?.summary) {
+      const memUsage = parseFloat(profile.memory.summary.usagePercent);
+      if (memUsage > 90) {
+        recommendations.push({
+          category: 'memory',
+          severity: 'critical',
+          issue: `Critical memory usage: ${memUsage}%`,
+          recommendations: [
+            'Investigate memory leaks immediately',
+            'Restart memory-intensive processes',
+            'Implement memory limits for containers/processes',
+            'Consider adding more RAM'
+          ],
+          priority: 1
+        });
+      } else if (memUsage > 80) {
+        recommendations.push({
+          category: 'memory',
+          severity: 'high',
+          issue: `High memory usage: ${memUsage}%`,
+          recommendations: [
+            'Review application memory consumption patterns',
+            'Implement garbage collection tuning',
+            'Monitor for memory leaks',
+            'Consider implementing object pooling'
+          ],
+          priority: 2
+        });
+      }
+
+      if (profile.memory.topProcesses && profile.memory.topProcesses.length > 0) {
+        const topProcess = profile.memory.topProcesses[0];
+        if (topProcess && topProcess.mem > 30) {
+          recommendations.push({
+            category: 'memory',
+            severity: 'medium',
+            issue: `Single process consuming ${topProcess.mem}% memory: ${topProcess.command}`,
+            recommendations: [
+              'Review process memory configuration',
+              'Consider splitting workload across multiple processes',
+              'Implement memory profiling for this process'
+            ],
+            priority: 3
+          });
+        }
+      }
+    }
+
+    // 디스크 최적화
+    if (profile.disk?.usage) {
+      for (const disk of profile.disk.usage) {
+        const usage = parseInt(disk.usePercent, 10);
+        if (usage > 95) {
+          recommendations.push({
+            category: 'disk',
+            severity: 'critical',
+            issue: `Critical disk usage on ${disk.mountPoint}: ${disk.usePercent}`,
+            recommendations: [
+              'Clean up logs and temporary files immediately',
+              'Archive or delete old data',
+              'Implement log rotation policies',
+              'Expand disk capacity urgently'
+            ],
+            priority: 1
+          });
+        } else if (usage > 85) {
+          recommendations.push({
+            category: 'disk',
+            severity: 'high',
+            issue: `High disk usage on ${disk.mountPoint}: ${disk.usePercent}`,
+            recommendations: [
+              'Review and clean up large files',
+              'Implement automated cleanup scripts',
+              'Set up monitoring alerts',
+              'Plan for capacity expansion'
+            ],
+            priority: 2
+          });
+        }
+      }
+    }
+
+    // 네트워크 최적화
+    if (profile.network?.establishedConnections) {
+      const connections = profile.network.establishedConnections;
+      if (connections > 50000) {
+        recommendations.push({
+          category: 'network',
+          severity: 'critical',
+          issue: `Excessive network connections: ${connections}`,
+          recommendations: [
+            'Review connection pooling configuration',
+            'Implement connection limits',
+            'Check for connection leaks',
+            'Consider using a load balancer'
+          ],
+          priority: 1
+        });
+      } else if (connections > 20000) {
+        recommendations.push({
+          category: 'network',
+          severity: 'medium',
+          issue: `High network connections: ${connections}`,
+          recommendations: [
+            'Monitor connection patterns',
+            'Optimize keep-alive settings',
+            'Review timeout configurations'
+          ],
+          priority: 3
+        });
+      }
+    }
+
+    // 병목 지점 기반 권장사항
+    if (profile.bottlenecks && profile.bottlenecks.length > 0) {
+      recommendations.push({
+        category: 'general',
+        severity: 'high',
+        issue: `${profile.bottlenecks.length} bottleneck(s) detected`,
+        recommendations: profile.bottlenecks.map((b) => b.recommendation),
+        priority: 1
+      });
+    }
+
+    // 우선순위로 정렬
+    recommendations.sort((a, b) => a.priority - b.priority);
+
     return {
-      compared: true,
-      message: '프로파일 비교 기능 구현 예정'
+      timestamp: new Date().toISOString(),
+      target: profile.target,
+      totalRecommendations: recommendations.length,
+      critical: recommendations.filter((r) => r.severity === 'critical').length,
+      high: recommendations.filter((r) => r.severity === 'high').length,
+      medium: recommendations.filter((r) => r.severity === 'medium').length,
+      recommendations
     };
   }
 

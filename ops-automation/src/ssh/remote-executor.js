@@ -3,6 +3,7 @@
  * SSH를 통한 원격 명령 안전 실행
  */
 
+import { readFileSync } from 'node:fs';
 import createLogger from '../../lib/logger.js';
 import SSHConnectionPool from './connection-pool.js';
 
@@ -242,7 +243,7 @@ class RemoteExecutor {
    */
   loadPrivateKey(keyPath) {
     try {
-      return require('node:fs').readFileSync(keyPath, 'utf8');
+      return readFileSync(keyPath, 'utf8');
     } catch (err) {
       logger.error(`SSH 키 로드 실패: ${keyPath}`, err);
       throw new Error('SSH 키를 찾을 수 없음');
