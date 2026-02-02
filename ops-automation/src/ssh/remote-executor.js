@@ -3,10 +3,13 @@
  * SSH를 통한 원격 명령 안전 실행
  */
 
-const fs = require('fs').promises;
-const path = require('path');
-const SSHConnectionPool = require('./connection-pool');
-const logger = require('../../lib/logger');
+import fs from 'fs/promises';
+import { readFileSync } from 'fs';
+import path from 'path';
+import SSHConnectionPool from './connection-pool.js';
+import createLogger from '../../lib/logger.js';
+
+const logger = createLogger('remote-executor');
 
 class RemoteExecutor {
   constructor(serversConfig, whitelistConfig) {
@@ -177,12 +180,23 @@ class RemoteExecutor {
   /**
    * 명령 허용 여부 확인
    */
-  isCommandAllowed(command, options) {
+  isCommandAllowed(command, options = {}) {
     if (!this.whitelistConfig) {
       return true; // 화이트리스트 없으면 모두 허용
     }
 
-    // 위험한 명령 패턴 체크
+    // 블록 패턴 체크
+    const blockedPatterns = this.whitelistConfig.blockedPatterns || [];
+    for (const pattern of blockedPatterns) {
+      if (command.includes(pattern)) {
+        if (!options.requireApproval) {
+          logger.warn(`위험한 명령 차단: ${command}`);
+          return false;
+        }
+      }
+    }
+
+    // 위험한 명령 패턴 추가 체크
     const dangerousPatterns = [
       /rm\s+-rf\s+\//,
       /dd\s+if=/,
@@ -200,11 +214,35 @@ class RemoteExecutor {
       }
     }
 
+    // sudo 체크
+    const hasSudo = command.startsWith('sudo ');
+    if (hasSudo && !options.allowSudo) {
+      return false;
+    }
+
     // 화이트리스트 체크
     const whitelist = this.whitelistConfig.allowedCommands || [];
-    const commandBase = command.split(' ')[0];
     
-    return whitelist.includes(commandBase) || whitelist.includes('*');
+    // sudo 제거 후 체크
+    const cleanCommand = hasSudo ? command.replace(/^sudo\s+/, '') : command;
+    
+    for (const entry of whitelist) {
+      if (typeof entry === 'string') {
+        // 정확히 일치하거나 시작하는지 체크
+        if (cleanCommand === entry || cleanCommand.startsWith(entry + ' ')) {
+          return true;
+        }
+      } else if (entry.pattern) {
+        // 패턴 매칭
+        const regex = new RegExp(entry.pattern);
+        if (regex.test(cleanCommand)) {
+          return true;
+        }
+      }
+    }
+    
+    // 와일드카드
+    return whitelist.includes('*');
   }
 
   /**
@@ -220,22 +258,26 @@ class RemoteExecutor {
       return this.serversConfig.groups[target];
     }
 
-    // 단일 호스트
-    return [target];
+    // 단일 호스트 (서버 설정에 있는 경우만)
+    if (this.serversConfig.servers && this.serversConfig.servers[target]) {
+      return [target];
+    }
+
+    // 알 수 없는 타겟
+    return [];
   }
 
   /**
    * 서버 설정 가져오기
    */
   getServerConfig(host) {
-    const sshConfig = this.serversConfig.ssh || {};
+    const server = this.serversConfig.servers?.[host];
     
-    return {
-      host,
-      port: sshConfig.port || 22,
-      username: sshConfig.user,
-      privateKey: sshConfig.privateKey || this.loadPrivateKey(sshConfig.key_path)
-    };
+    if (!server) {
+      throw new Error(`서버를 찾을 수 없음: ${host}`);
+    }
+    
+    return server;
   }
 
   /**
@@ -243,7 +285,7 @@ class RemoteExecutor {
    */
   loadPrivateKey(keyPath) {
     try {
-      return require('fs').readFileSync(keyPath, 'utf8');
+      return readFileSync(keyPath, 'utf8');
     } catch (err) {
       logger.error(`SSH 키 로드 실패: ${keyPath}`, err);
       throw new Error('SSH 키를 찾을 수 없음');
@@ -280,6 +322,7 @@ class RemoteExecutor {
       dryRun: true,
       results: hosts.map(host => ({
         host,
+        wouldExecute: command,
         exitCode: 0,
         stdout: '[DRY-RUN] 실행되지 않음',
         stderr: '',
@@ -326,10 +369,13 @@ class RemoteExecutor {
    * 결과 포맷팅
    */
   formatResults(results) {
+    const summary = this.getSummary(results);
     return {
-      success: results.every(r => r.success),
-      results,
-      summary: this.getSummary(results)
+      success: results.some(r => r.success),
+      totalHosts: summary.total,
+      successCount: summary.succeeded,
+      failureCount: summary.failed,
+      results
     };
   }
 
@@ -341,6 +387,57 @@ class RemoteExecutor {
       total: results.length,
       succeeded: results.filter(r => r.success).length,
       failed: results.filter(r => !r.success).length
+    };
+  }
+
+  /**
+   * 실행 기록 저장
+   */
+  recordExecution(command, hosts, results) {
+    const record = {
+      command,
+      hosts,
+      results,
+      timestamp: Date.now(),
+      success: results.some(r => r.success)
+    };
+    
+    this.executionHistory.push(record);
+    
+    // 최대 1000개까지만 보관
+    if (this.executionHistory.length > 1000) {
+      this.executionHistory.shift();
+    }
+    
+    logger.info('SSH 명령 실행', {
+      command,
+      hosts: hosts.length,
+      succeeded: results.filter(r => r.success).length,
+      failed: results.filter(r => !r.success).length
+    });
+  }
+
+  /**
+   * 실행 이력 조회
+   */
+  getExecutionHistory(limit = 100) {
+    const count = Math.min(limit, this.executionHistory.length);
+    return this.executionHistory.slice(-count).reverse();
+  }
+
+  /**
+   * 실행 통계
+   */
+  getStats() {
+    const total = this.executionHistory.length;
+    const successful = this.executionHistory.filter(r => r.success).length;
+    const failed = total - successful;
+    
+    return {
+      totalExecutions: total,
+      successfulExecutions: successful,
+      failedExecutions: failed,
+      successRate: total > 0 ? (successful / total) * 100 : 0
     };
   }
 
@@ -364,4 +461,4 @@ class RemoteExecutor {
   }
 }
 
-module.exports = RemoteExecutor;
+export default RemoteExecutor;
