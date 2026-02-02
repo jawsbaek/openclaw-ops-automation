@@ -1,4 +1,3 @@
-import { promises as fs } from 'node:fs';
 import PatchGenerator from '../../../src/code-healer/patch-generator.js';
 
 describe('PatchGenerator', () => {
