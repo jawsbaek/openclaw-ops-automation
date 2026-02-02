@@ -224,83 +224,289 @@ Inter-|   Receive                                                |  Transmit
     });
   });
 
-  describe.skip('generateRecommendations', () => {
-    // TODO: Implement generateRecommendations method in Profiler
+  describe('generateRecommendations', () => {
+    test('should return error when profile is not provided', () => {
+      const result = profiler.generateRecommendations(null);
+
+      expect(result).toHaveProperty('error');
+      expect(result.error).toBe('Profile is required for generating recommendations');
+    });
+
     test('should recommend CPU optimization for high CPU usage', () => {
-      const bottlenecks = [{ type: 'cpu', severity: 'high', value: 85 }];
+      const profile = {
+        target: 'test-host',
+        cpu: { usage: { usage: 85 } },
+        memory: { summary: { usagePercent: 50 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
 
-      const recommendations = profiler.generateRecommendations(bottlenecks);
+      const result = profiler.generateRecommendations(profile);
 
-      expect(recommendations.length).toBeGreaterThan(0);
-      expect(recommendations[0].type).toBe('cpu');
-      expect(recommendations[0].actions).toContain(expect.stringContaining('CPU'));
+      expect(result).toHaveProperty('recommendations');
+      expect(result.recommendations.length).toBeGreaterThan(0);
+      expect(result.recommendations[0].category).toBe('cpu');
+      expect(result.recommendations[0].severity).toBe('high');
+    });
+
+    test('should recommend critical actions for very high CPU usage', () => {
+      const profile = {
+        target: 'test-host',
+        cpu: { usage: { usage: 92 } },
+        memory: { summary: { usagePercent: 50 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
+
+      const result = profiler.generateRecommendations(profile);
+
+      expect(result.critical).toBeGreaterThan(0);
+      expect(result.recommendations[0].severity).toBe('critical');
     });
 
     test('should recommend memory optimization for high memory usage', () => {
-      const bottlenecks = [{ type: 'memory', severity: 'high', value: 88 }];
+      const profile = {
+        target: 'test-host',
+        cpu: { usage: { usage: 50 } },
+        memory: { summary: { usagePercent: 85, used: 8000, topProcesses: [] } },
+        disk: { usage: [] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
 
-      const recommendations = profiler.generateRecommendations(bottlenecks);
+      const result = profiler.generateRecommendations(profile);
 
-      expect(recommendations.length).toBeGreaterThan(0);
-      expect(recommendations[0].type).toBe('memory');
-      expect(recommendations[0].actions).toContain(expect.stringContaining('memory'));
+      expect(result.recommendations.length).toBeGreaterThan(0);
+      expect(result.recommendations.some((r) => r.category === 'memory')).toBe(true);
     });
 
-    test('should return empty array for no bottlenecks', () => {
-      const recommendations = profiler.generateRecommendations([]);
+    test('should recommend disk cleanup for high disk usage', () => {
+      const profile = {
+        target: 'test-host',
+        cpu: { usage: { usage: 30 } },
+        memory: { summary: { usagePercent: 50 } },
+        disk: { usage: [{ mountPoint: '/', usePercent: '92%' }] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
 
-      expect(recommendations).toEqual([]);
+      const result = profiler.generateRecommendations(profile);
+
+      expect(result.recommendations.length).toBeGreaterThan(0);
+      expect(result.recommendations.some((r) => r.category === 'disk')).toBe(true);
     });
 
-    test('should prioritize critical bottlenecks', () => {
-      const bottlenecks = [
-        { type: 'disk', severity: 'critical', value: 95 },
-        { type: 'cpu', severity: 'medium', value: 70 }
-      ];
+    test('should return empty recommendations for healthy profile', () => {
+      const profile = {
+        target: 'test-host',
+        cpu: { usage: { usage: 30 } },
+        memory: { summary: { usagePercent: 40 } },
+        disk: { usage: [{ mountPoint: '/', usePercent: '50%' }] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
 
-      const recommendations = profiler.generateRecommendations(bottlenecks);
+      const result = profiler.generateRecommendations(profile);
 
-      expect(recommendations[0].priority).toBe('critical');
+      expect(result.recommendations).toEqual([]);
+      expect(result.totalRecommendations).toBe(0);
+    });
+
+    test('should prioritize recommendations by priority field', () => {
+      const profile = {
+        target: 'test-host',
+        cpu: { usage: { usage: 95 } },
+        memory: { summary: { usagePercent: 92 } },
+        disk: { usage: [{ mountPoint: '/', usePercent: '97%' }] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
+
+      const result = profiler.generateRecommendations(profile);
+
+      expect(result.recommendations[0].priority).toBe(1);
+    });
+
+    test('should include bottleneck-based recommendations', () => {
+      const profile = {
+        target: 'test-host',
+        cpu: { usage: { usage: 30 } },
+        memory: { summary: { usagePercent: 40 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 100 },
+        bottlenecks: [{ type: 'custom', severity: 'high', recommendation: 'Custom recommendation' }]
+      };
+
+      const result = profiler.generateRecommendations(profile);
+
+      expect(result.recommendations.length).toBeGreaterThan(0);
+      expect(result.recommendations.some((r) => r.category === 'general')).toBe(true);
     });
   });
 
-  describe.skip('compareProfiles', () => {
-    // TODO: Implement compareProfiles method in Profiler (currently returns placeholder)
-    test('should compare two profiles', () => {
-      const profile1 = {
-        cpu: { usage: { user: 60, system: 10 } },
-        memory: { usage: 50 },
-        timestamp: '2026-02-02T00:00:00Z'
-      };
+  describe('compareProfiles', () => {
+    test('should return error when profiles are not provided', () => {
+      const result = profiler.compareProfiles(null, null);
 
-      const profile2 = {
-        cpu: { usage: { user: 80, system: 15 } },
-        memory: { usage: 70 },
-        timestamp: '2026-02-02T01:00:00Z'
-      };
-
-      const comparison = profiler.compareProfiles(profile1, profile2);
-
-      expect(comparison).toHaveProperty('cpuChange');
-      expect(comparison).toHaveProperty('memoryChange');
-      expect(comparison.cpuChange).toBeGreaterThan(0);
-      expect(comparison.memoryChange).toBeGreaterThan(0);
+      expect(result).toHaveProperty('error');
+      expect(result.error).toBe('Both profiles are required for comparison');
     });
 
-    test('should detect performance degradation', () => {
+    test('should return error when first profile is missing', () => {
+      const profile2 = { target: 'test-host', timestamp: '2026-02-02T01:00:00Z' };
+
+      const result = profiler.compareProfiles(null, profile2);
+
+      expect(result).toHaveProperty('error');
+    });
+
+    test('should compare CPU usage between two profiles', () => {
       const profile1 = {
-        cpu: { usage: { user: 40, system: 5 } },
-        memory: { usage: 50 }
+        target: 'test-host',
+        timestamp: '2026-02-02T00:00:00Z',
+        cpu: { usage: { usage: 40 }, loadAverage: { '1min': 1.0, '5min': 0.8 } },
+        memory: { summary: { usagePercent: 50, used: 4000 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
       };
 
       const profile2 = {
-        cpu: { usage: { user: 85, system: 10 } },
-        memory: { usage: 88 }
+        target: 'test-host',
+        timestamp: '2026-02-02T01:00:00Z',
+        cpu: { usage: { usage: 70 }, loadAverage: { '1min': 2.0, '5min': 1.5 } },
+        memory: { summary: { usagePercent: 60, used: 5000 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 150 },
+        bottlenecks: []
       };
 
       const comparison = profiler.compareProfiles(profile1, profile2);
 
-      expect(comparison.degraded).toBe(true);
+      expect(comparison).toHaveProperty('changes');
+      expect(comparison.changes).toHaveProperty('cpu');
+      expect(comparison.changes.cpu.usage.before).toBe(40);
+      expect(comparison.changes.cpu.usage.after).toBe(70);
+      expect(comparison.changes.cpu.usage.delta).toBe(30);
+      expect(comparison.changes.cpu.usage.trend).toBe('increasing');
+    });
+
+    test('should compare memory usage between two profiles', () => {
+      const profile1 = {
+        target: 'test-host',
+        timestamp: '2026-02-02T00:00:00Z',
+        cpu: { usage: { usage: 40 } },
+        memory: { summary: { usagePercent: 50, used: 4000 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
+
+      const profile2 = {
+        target: 'test-host',
+        timestamp: '2026-02-02T01:00:00Z',
+        cpu: { usage: { usage: 45 } },
+        memory: { summary: { usagePercent: 70, used: 6000 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
+
+      const comparison = profiler.compareProfiles(profile1, profile2);
+
+      expect(comparison.changes).toHaveProperty('memory');
+      expect(comparison.changes.memory.usage.before).toBe(50);
+      expect(comparison.changes.memory.usage.after).toBe(70);
+      expect(comparison.changes.memory.usage.trend).toBe('increasing');
+    });
+
+    test('should compare disk usage between two profiles', () => {
+      const profile1 = {
+        target: 'test-host',
+        timestamp: '2026-02-02T00:00:00Z',
+        cpu: { usage: { usage: 40 } },
+        memory: { summary: { usagePercent: 50, used: 4000 } },
+        disk: { usage: [{ mountPoint: '/', usePercent: '60%' }] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
+
+      const profile2 = {
+        target: 'test-host',
+        timestamp: '2026-02-02T01:00:00Z',
+        cpu: { usage: { usage: 40 } },
+        memory: { summary: { usagePercent: 50, used: 4000 } },
+        disk: { usage: [{ mountPoint: '/', usePercent: '75%' }] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
+
+      const comparison = profiler.compareProfiles(profile1, profile2);
+
+      expect(comparison.changes).toHaveProperty('disk');
+      expect(comparison.changes.disk).toBeInstanceOf(Array);
+      expect(comparison.changes.disk[0].mountPoint).toBe('/');
+      expect(comparison.changes.disk[0].before).toBe(60);
+      expect(comparison.changes.disk[0].after).toBe(75);
+      expect(comparison.changes.disk[0].trend).toBe('increasing');
+    });
+
+    test('should detect stable metrics (no significant change)', () => {
+      const profile1 = {
+        target: 'test-host',
+        timestamp: '2026-02-02T00:00:00Z',
+        cpu: { usage: { usage: 50 } },
+        memory: { summary: { usagePercent: 60, used: 5000 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
+
+      const profile2 = {
+        target: 'test-host',
+        timestamp: '2026-02-02T01:00:00Z',
+        cpu: { usage: { usage: 52 } },
+        memory: { summary: { usagePercent: 62, used: 5200 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 105 },
+        bottlenecks: []
+      };
+
+      const comparison = profiler.compareProfiles(profile1, profile2);
+
+      expect(comparison.changes.cpu.usage.trend).toBe('stable');
+      expect(comparison.changes.memory.usage.trend).toBe('stable');
+    });
+
+    test('should track bottleneck changes', () => {
+      const profile1 = {
+        target: 'test-host',
+        timestamp: '2026-02-02T00:00:00Z',
+        cpu: { usage: { usage: 50 } },
+        memory: { summary: { usagePercent: 60, used: 5000 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 100 },
+        bottlenecks: [{ type: 'cpu', severity: 'high' }]
+      };
+
+      const profile2 = {
+        target: 'test-host',
+        timestamp: '2026-02-02T01:00:00Z',
+        cpu: { usage: { usage: 40 } },
+        memory: { summary: { usagePercent: 50, used: 4000 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
+
+      const comparison = profiler.compareProfiles(profile1, profile2);
+
+      expect(comparison).toHaveProperty('bottleneckChanges');
+      expect(comparison.bottleneckChanges.before).toBe(1);
+      expect(comparison.bottleneckChanges.after).toBe(0);
+      expect(comparison.bottleneckChanges.resolved.length).toBe(1);
     });
   });
 
