@@ -108,7 +108,8 @@ const INJECTION_PATTERNS = [
   },
   {
     name: 'SQL string concatenation',
-    pattern: /(?:SELECT|INSERT|UPDATE|DELETE)[\s\S]*?(?:\+|\$\{)[\s\S]*?(?:FROM|INTO|SET|WHERE)/gi,
+    // Match actual SQL queries with string concatenation, not just keywords in comments
+    pattern: /(?:['"`])\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+[\w*,\s]+\s+(?:FROM|INTO)\s+[\w]+[\s\S]{0,50}(?:\+|\$\{)/gi,
     severity: 'critical',
     message: 'Potential SQL injection via string concatenation'
   }
