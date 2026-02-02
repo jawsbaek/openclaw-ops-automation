@@ -1,0 +1,19 @@
+# Runtime
+metrics/
+analysis/
+incidents/
+reports/
+status/
+logs/
+
+# Sensitive
+*.key
+*.pem
+secrets/
+.env
+
+# macOS
+.DS_Store
+
+# Node
+node_modules/

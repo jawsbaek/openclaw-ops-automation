@@ -1,0 +1,142 @@
+{
+  "disk_space_low": {
+    "condition": {
+      "metric": "disk_usage",
+      "operator": ">",
+      "threshold": 90
+    },
+    "actions": [
+      {
+        "type": "shell",
+        "command": "find /tmp -type f -mtime +7 -delete",
+        "description": "Clean temporary files older than 7 days",
+        "timeout_seconds": 60
+      },
+      {
+        "type": "shell",
+        "command": "find /var/log -name '*.log.*' -mtime +30 -delete",
+        "description": "Remove old log archives",
+        "timeout_seconds": 60
+      },
+      {
+        "type": "shell",
+        "command": "docker system prune -f",
+        "description": "Clean unused Docker resources",
+        "timeout_seconds": 120
+      }
+    ],
+    "verify": {
+      "metric": "disk_usage",
+      "operator": "<",
+      "threshold": 85,
+      "retry_count": 3,
+      "retry_interval_seconds": 60
+    },
+    "requires_approval": false
+  },
+  "process_down": {
+    "condition": {
+      "metric": "process_status",
+      "operator": "==",
+      "value": "stopped"
+    },
+    "actions": [
+      {
+        "type": "service_restart",
+        "service": "{process_name}",
+        "description": "Restart the stopped process",
+        "timeout_seconds": 30
+      }
+    ],
+    "verify": {
+      "metric": "process_status",
+      "operator": "==",
+      "value": "running",
+      "retry_count": 2,
+      "retry_interval_seconds": 10
+    },
+    "requires_approval": false
+  },
+  "memory_leak": {
+    "condition": {
+      "metric": "memory_usage",
+      "operator": ">",
+      "threshold": 95
+    },
+    "actions": [
+      {
+        "type": "shell",
+        "command": "pkill -f 'node.*openclaw' && openclaw gateway start",
+        "description": "Restart OpenClaw gateway to free memory",
+        "timeout_seconds": 60
+      }
+    ],
+    "verify": {
+      "metric": "memory_usage",
+      "operator": "<",
+      "threshold": 70,
+      "retry_count": 1,
+      "retry_interval_seconds": 30
+    },
+    "requires_approval": true
+  },
+  "api_slow": {
+    "condition": {
+      "metric": "api_latency_ms",
+      "operator": ">",
+      "threshold": 2000
+    },
+    "actions": [
+      {
+        "type": "http",
+        "method": "POST",
+        "url": "http://localhost:8080/admin/reset-pool",
+        "description": "Reset connection pool",
+        "timeout_seconds": 10
+      },
+      {
+        "type": "shell",
+        "command": "nginx -s reload",
+        "description": "Reload nginx configuration",
+        "timeout_seconds": 10
+      }
+    ],
+    "verify": {
+      "metric": "api_latency_ms",
+      "operator": "<",
+      "threshold": 500,
+      "retry_count": 3,
+      "retry_interval_seconds": 30
+    },
+    "requires_approval": false
+  },
+  "ssl_expiring": {
+    "condition": {
+      "metric": "ssl_expires_in_days",
+      "operator": "<",
+      "threshold": 7
+    },
+    "actions": [
+      {
+        "type": "shell",
+        "command": "certbot renew --quiet",
+        "description": "Renew SSL certificate",
+        "timeout_seconds": 120
+      },
+      {
+        "type": "shell",
+        "command": "nginx -s reload",
+        "description": "Reload nginx to use new certificate",
+        "timeout_seconds": 10
+      }
+    ],
+    "verify": {
+      "metric": "ssl_expires_in_days",
+      "operator": ">",
+      "threshold": 60,
+      "retry_count": 1,
+      "retry_interval_seconds": 0
+    },
+    "requires_approval": false
+  }
+}

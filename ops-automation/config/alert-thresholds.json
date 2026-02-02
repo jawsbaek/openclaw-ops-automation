@@ -1,0 +1,39 @@
+{
+  "cpu_usage": {
+    "warning": 70,
+    "critical": 90,
+    "sustained_minutes": 5
+  },
+  "memory_usage": {
+    "warning": 80,
+    "critical": 95,
+    "sustained_minutes": 3
+  },
+  "disk_usage": {
+    "warning": 75,
+    "critical": 90,
+    "sustained_minutes": 0
+  },
+  "api_latency_ms": {
+    "warning": 500,
+    "critical": 2000,
+    "sustained_requests": 10
+  },
+  "error_rate_per_min": {
+    "warning": 10,
+    "critical": 50,
+    "sustained_minutes": 2
+  },
+  "process_down": {
+    "severity": "critical",
+    "auto_heal": true
+  },
+  "ssl_expires_in_days": {
+    "warning": 30,
+    "critical": 7
+  },
+  "log_file_size_mb": {
+    "warning": 500,
+    "critical": 1000
+  }
+}

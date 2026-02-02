@@ -1,0 +1,61 @@
+{
+  "prometheus": {
+    "enabled": false,
+    "endpoint": "http://localhost:9090",
+    "queries": {
+      "cpu": "rate(node_cpu_seconds_total{mode!=\"idle\"}[5m])",
+      "memory": "node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes",
+      "disk": "node_filesystem_avail_bytes / node_filesystem_size_bytes",
+      "network_in": "rate(node_network_receive_bytes_total[5m])",
+      "network_out": "rate(node_network_transmit_bytes_total[5m])"
+    }
+  },
+  "system": {
+    "enabled": true,
+    "commands": {
+      "cpu": "top -l 1 | grep 'CPU usage' | awk '{print $3}' | sed 's/%//'",
+      "memory_used": "vm_stat | awk '/Pages active/ {print $3}' | sed 's/\\.//'",
+      "disk": "df -h / | awk 'NR==2 {print $5}' | sed 's/%//'",
+      "network": "netstat -ib | awk 'NR>1 {sum+=$7} END {print sum}'"
+    }
+  },
+  "logs": {
+    "enabled": true,
+    "paths": [
+      "/tmp/openclaw/openclaw-*.log",
+      "/var/log/system.log",
+      "/usr/local/var/log/nginx/*.log"
+    ],
+    "error_patterns": [
+      "ERROR",
+      "FATAL",
+      "Exception",
+      "failed",
+      "timeout"
+    ]
+  },
+  "healthchecks": [
+    {
+      "name": "OpenClaw Gateway",
+      "type": "command",
+      "command": "openclaw gateway status | grep 'RPC probe: ok'",
+      "interval": 60,
+      "critical": true
+    },
+    {
+      "name": "Local API",
+      "type": "http",
+      "url": "http://localhost:8080/health",
+      "interval": 60,
+      "timeout": 5,
+      "expected_status": 200
+    }
+  ],
+  "processes": {
+    "enabled": true,
+    "watch": [
+      {"name": "openclaw", "pattern": "openclaw/dist/index.js", "critical": true},
+      {"name": "nginx", "pattern": "nginx: master", "critical": false}
+    ]
+  }
+}
