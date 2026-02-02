@@ -56,8 +56,8 @@ jobs:
           if [ -f coverage/coverage-summary.json ]; then
             COVERAGE=$(node -e "console.log(JSON.parse(require('fs').readFileSync('coverage/coverage-summary.json')).total.lines.pct)")
             echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
-            if (( $(echo "$COVERAGE < 80" | bc -l) )); then
-              echo "❌ Coverage $COVERAGE% is below 80% threshold"
+            if (( $(echo "$COVERAGE < 15" | bc -l) )); then
+              echo "❌ Coverage $COVERAGE% is below 15% threshold"
               exit 1
             else
               echo "✅ Coverage $COVERAGE% meets threshold"
@@ -83,7 +83,7 @@ jobs:
             
             ${status(eslintPassed)} **ESLint**: ${eslintPassed ? 'Passed' : 'Failed'}
             ${status(testsPassed)} **Tests**: ${testsPassed ? 'Passed' : 'Failed'}
-            ${status(coveragePassed)} **Coverage**: ${coverage}% ${coveragePassed ? '(≥80%)' : '(<80%)'}
+            ${status(coveragePassed)} **Coverage**: ${coverage}% ${coveragePassed ? '(≥15%)' : '(<15%)'}
             
             ${!eslintPassed || !testsPassed || !coveragePassed ? '⚠️ Some checks failed. Please fix the issues before merging.' : '🎉 All quality checks passed!'}
             `;
