@@ -1,12 +1,12 @@
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 // Mock logger before importing DeployManager
-jest.unstable_mockModule('../../../lib/logger.js', () => ({
+vi.mock('../../../lib/logger.js', () => ({
   default: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn()
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
   }
 }));
 

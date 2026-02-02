@@ -2,32 +2,32 @@
  * @fileoverview Tests for Orchestrator Agent
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 // Mock all dependencies BEFORE importing orchestrator
-jest.unstable_mockModule('../../lib/logger.js', () => ({
-  createLogger: jest.fn(() => ({
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn()
+vi.mock('../../lib/logger.js', () => ({
+  createLogger: vi.fn(() => ({
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn()
   }))
 }));
 
-jest.unstable_mockModule('../../agents/metrics-collector.js', () => ({
-  default: jest.fn()
+vi.mock('../../agents/metrics-collector.js', () => ({
+  default: vi.fn()
 }));
 
-jest.unstable_mockModule('../../agents/logs-analyzer.js', () => ({
-  default: jest.fn()
+vi.mock('../../agents/logs-analyzer.js', () => ({
+  default: vi.fn()
 }));
 
-jest.unstable_mockModule('../../agents/alert-handler.js', () => ({
-  run: jest.fn()
+vi.mock('../../agents/alert-handler.js', () => ({
+  run: vi.fn()
 }));
 
-jest.unstable_mockModule('../../agents/reporter.js', () => ({
-  default: jest.fn()
+vi.mock('../../agents/reporter.js', () => ({
+  default: vi.fn()
 }));
 
 // Import mocked modules
@@ -45,14 +45,14 @@ describe('Orchestrator Agent', () => {
   let activeIntervals = [];
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     activeIntervals = [];
 
     mockLogger = {
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn()
+      info: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
+      debug: vi.fn()
     };
     createLogger.mockReturnValue(mockLogger);
 
@@ -294,11 +294,11 @@ describe('Orchestrator Agent', () => {
 
   describe('start()', () => {
     beforeEach(() => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
 
       // Spy on setInterval to track created intervals
       const originalSetInterval = global.setInterval;
-      jest.spyOn(global, 'setInterval').mockImplementation((fn, delay) => {
+      vi.spyOn(global, 'setInterval').mockImplementation((fn, delay) => {
         const id = originalSetInterval(fn, delay);
         activeIntervals.push(id);
         return id;
@@ -306,20 +306,20 @@ describe('Orchestrator Agent', () => {
     });
 
     afterEach(() => {
-      jest.clearAllTimers();
-      jest.useRealTimers();
-      jest.restoreAllMocks();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+      vi.restoreAllMocks();
     });
 
     test('should run initial heartbeat on start', async () => {
       // Restore real timers and the real setInterval
-      jest.useRealTimers();
-      jest.restoreAllMocks();
+      vi.useRealTimers();
+      vi.restoreAllMocks();
 
       // Re-spy on setInterval with real implementation to track intervals
       const originalSetInterval = global.setInterval;
       let intervalCreated = false;
-      jest.spyOn(global, 'setInterval').mockImplementation((fn, delay) => {
+      vi.spyOn(global, 'setInterval').mockImplementation((fn, delay) => {
         intervalCreated = true;
         const id = originalSetInterval(fn, delay);
         activeIntervals.push(id);
@@ -339,7 +339,7 @@ describe('Orchestrator Agent', () => {
       start(interval);
 
       // Flush pending timers to allow start to complete
-      await jest.runOnlyPendingTimersAsync();
+      await vi.runOnlyPendingTimersAsync();
 
       // Verify setInterval was called
       expect(global.setInterval).toHaveBeenCalled();
@@ -349,7 +349,7 @@ describe('Orchestrator Agent', () => {
       start();
 
       // Flush pending timers to allow start to complete
-      await jest.runOnlyPendingTimersAsync();
+      await vi.runOnlyPendingTimersAsync();
 
       // Should still set up interval
       expect(global.setInterval).toHaveBeenCalled();
@@ -364,27 +364,27 @@ describe('Orchestrator Agent', () => {
       await Promise.resolve();
 
       // Advance timer
-      jest.advanceTimersByTime(60000);
+      vi.advanceTimersByTime(60000);
       await Promise.resolve();
       await Promise.resolve();
 
       // Should not crash - interval should still be active
-      expect(jest.getTimerCount()).toBeGreaterThan(0);
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
     });
   });
 
   describe('Report Generation', () => {
     beforeEach(() => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
     });
 
     afterEach(() => {
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     test('should generate daily report at scheduled hour', async () => {
       // Set to 9 AM on a weekday
-      jest.setSystemTime(new Date('2024-01-15T09:30:00Z'));
+      vi.setSystemTime(new Date('2024-01-15T09:30:00Z'));
 
       const result = await heartbeat();
 
@@ -402,7 +402,7 @@ describe('Orchestrator Agent', () => {
 
     test('should not generate daily report at wrong hour', async () => {
       // Set to 8 AM (not report hour)
-      jest.setSystemTime(new Date('2024-01-15T08:30:00Z'));
+      vi.setSystemTime(new Date('2024-01-15T08:30:00Z'));
 
       const result = await heartbeat();
 
@@ -415,7 +415,7 @@ describe('Orchestrator Agent', () => {
     });
 
     test('should handle report generation failure', async () => {
-      jest.setSystemTime(new Date('2024-01-15T09:30:00Z'));
+      vi.setSystemTime(new Date('2024-01-15T09:30:00Z'));
       generateReport.mockRejectedValueOnce(new Error('Report generation failed'));
 
       const result = await heartbeat();

@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -18,11 +18,11 @@ const testAnalysisDir = join(baseDir, 'analysis');
 const testReportsDir = join(baseDir, 'reports');
 
 // Mock logger
-jest.unstable_mockModule('../../lib/logger.js', () => ({
-  createLogger: jest.fn(() => ({
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn()
+vi.mock('../../lib/logger.js', () => ({
+  createLogger: vi.fn(() => ({
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn()
   }))
 }));
 
