@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { loadAutoHealPlaybooks } from '../lib/config-loader.js';
 import { saveIncident } from '../lib/file-utils.js';
 import { createLogger } from '../lib/logger.js';
+import { updateIncidentWithAutoHealResult } from '../src/jsm/jsm-integration.js';
 
 const execAsync = promisify(exec);
 const logger = createLogger('autoheal');
@@ -287,9 +288,12 @@ function findPlaybook(scenario, context) {
  * Executes a healing playbook
  * @param {string} scenario - Scenario name or type
  * @param {Object} context - Context data (metrics, alert info, etc.)
+ * @param {Object} options - Healing options
+ * @param {string} options.jsmIssueKey - JSM issue key to update with results
  * @returns {Promise<Object>} Healing result
  */
-export async function heal(scenario, context = {}) {
+export async function heal(scenario, context = {}, options = {}) {
+  const { jsmIssueKey } = options;
   const incidentId = `heal-${Date.now()}`;
 
   logger.info('Starting AutoHeal', { incidentId, scenario, context });
@@ -365,7 +369,6 @@ export async function heal(scenario, context = {}) {
     timestamp: new Date().toISOString()
   };
 
-  // Generate incident report
   const report = generateIncidentReport(healingResult, context);
   const reportPath = saveIncident(incidentId, report);
 
@@ -376,7 +379,27 @@ export async function heal(scenario, context = {}) {
     reportPath
   });
 
-  return { ...healingResult, reportPath };
+  const finalResult = { ...healingResult, reportPath };
+
+  if (jsmIssueKey) {
+    try {
+      const jsmUpdateResult = await updateIncidentWithAutoHealResult(jsmIssueKey, finalResult);
+      if (jsmUpdateResult) {
+        logger.info('JSM ticket updated with AutoHeal result', {
+          issueKey: jsmIssueKey,
+          updated: jsmUpdateResult.updated
+        });
+        finalResult.jsmUpdated = true;
+      }
+    } catch (error) {
+      logger.warn('Failed to update JSM ticket with AutoHeal result', {
+        issueKey: jsmIssueKey,
+        error: error.message
+      });
+    }
+  }
+
+  return finalResult;
 }
 
 /**

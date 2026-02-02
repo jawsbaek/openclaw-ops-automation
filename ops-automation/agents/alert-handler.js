@@ -6,6 +6,7 @@
 import { loadAlertThresholds } from '../lib/config-loader.js';
 import { getLatestMetrics } from '../lib/file-utils.js';
 import { createLogger } from '../lib/logger.js';
+import { createIncidentFromAlert } from '../src/jsm/jsm-integration.js';
 
 const logger = createLogger('alert-handler');
 
@@ -192,11 +193,41 @@ export async function processAlerts() {
 }
 
 /**
+ * Creates a JSM incident from an alert
+ * @param {Object} alert - Alert object
+ * @returns {Promise<Object|null>} JSM incident result or null if disabled/failed
+ */
+async function createJSMIncident(alert) {
+  try {
+    const result = await createIncidentFromAlert(alert);
+    if (result) {
+      logger.info('JSM incident created', {
+        alertId: alert.id,
+        issueKey: result.issueKey,
+        deduplicated: result.deduplicated
+      });
+      return result;
+    }
+    return null;
+  } catch (error) {
+    logger.warn('Failed to create JSM incident', {
+      alertId: alert.id,
+      error: error.message
+    });
+    return null;
+  }
+}
+
+/**
  * Handles a single alert (escalation, notification, triggering AutoHeal)
  * @param {Object} alert - Alert object
+ * @param {Object} options - Handler options
+ * @param {boolean} options.createJSMTicket - Whether to create JSM ticket (default: true)
  * @returns {Promise<Object>} Handling result
  */
-export async function handleAlert(alert) {
+export async function handleAlert(alert, options = {}) {
+  const { createJSMTicket = true } = options;
+
   logger.info('Handling alert', {
     id: alert.id,
     metric: alert.metric,
@@ -211,6 +242,15 @@ export async function handleAlert(alert) {
 
   // Log alert
   result.actions.push('logged');
+
+  if (createJSMTicket) {
+    const jsmResult = await createJSMIncident(alert);
+    if (jsmResult) {
+      result.actions.push('jsm_ticket_created');
+      result.jsmIssueKey = jsmResult.issueKey;
+      result.jsmDeduplicated = jsmResult.deduplicated;
+    }
+  }
 
   // If critical, we should notify (in real system, send email/slack/pagerduty)
   if (alert.level === PRIORITY.CRITICAL) {
