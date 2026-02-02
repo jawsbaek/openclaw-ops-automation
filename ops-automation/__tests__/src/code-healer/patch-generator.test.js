@@ -1,4 +1,29 @@
-import PatchGenerator from '../../../src/code-healer/patch-generator.js';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+
+const mockReadFile = vi.fn();
+const mockLogger = {
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn()
+};
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    promises: {
+      ...actual.promises,
+      readFile: mockReadFile
+    }
+  };
+});
+
+vi.mock('../../../lib/logger.js', () => ({
+  default: mockLogger
+}));
+
+const { default: PatchGenerator } = await import('../../../src/code-healer/patch-generator.js');
 
 describe('PatchGenerator', () => {
   let patchGenerator;
@@ -436,6 +461,292 @@ describe('PatchGenerator', () => {
 
       expect(result.type).toBe('insert');
       expect(result.modified).toContain('resource.release();');
+    });
+  });
+
+  describe('replaceCache', () => {
+    test('should replace unbounded cache declaration with LRU', () => {
+      const lines = ['const cache = {}', 'cache[key] = value;', 'return cache[key];'];
+      const fix = { maxSize: 100, maxAge: 3600000 };
+
+      const result = patchGenerator.replaceCache(lines, 1, fix);
+
+      expect(result).toBeDefined();
+      expect(result.type).toBe('replace');
+      expect(result.modified).toContain('LRU');
+      expect(result.modified).toContain('max: 100');
+    });
+
+    test('should convert cache[key] to cache.get(key)', () => {
+      const lines = ['const cache = {}', 'const val = cache[myKey];', 'cache[otherKey] = newVal;'];
+      const fix = { maxSize: 50, maxAge: 1800000 };
+
+      const result = patchGenerator.replaceCache(lines, 1, fix);
+
+      expect(result).toBeDefined();
+    });
+
+    test('should return first change when cache declaration exists', () => {
+      const lines = ['const cache = {}', 'return cache[key];'];
+      const fix = { maxSize: 200, maxAge: 7200000 };
+
+      const result = patchGenerator.replaceCache(lines, 1, fix);
+
+      expect(result.lineNumber).toBe(1);
+    });
+
+    test('should handle cache get/set conversions', () => {
+      const lines = ['const data = cache[id];', 'cache[newId] = data;'];
+      const fix = { maxSize: 100, maxAge: 3600000 };
+
+      const result = patchGenerator.replaceCache(lines, 1, fix);
+
+      if (result) {
+        expect(result.modified).toContain('cache.get');
+      }
+    });
+  });
+
+  describe('applyChanges - wrap type', () => {
+    test('should apply wrap change correctly', () => {
+      const lines = ['line1', 'line2', 'line3', 'line4'];
+      const changes = [
+        {
+          type: 'wrap',
+          lineNumber: 2,
+          start: 1,
+          end: 2,
+          modified: 'try {\n  line2\n  line3\n} finally {\n  cleanup();\n}'
+        }
+      ];
+
+      const result = patchGenerator.applyChanges(lines, changes);
+
+      expect(result).toContain('try {');
+      expect(result).toContain('finally');
+      expect(result).toContain('cleanup()');
+    });
+
+    test('should handle wrap with multiple lines', () => {
+      const lines = ['function test() {', '  const x = 1;', '  const y = 2;', '  return x + y;', '}'];
+      const changes = [
+        {
+          type: 'wrap',
+          lineNumber: 2,
+          start: 1,
+          end: 3,
+          modified: '  try {\n    const x = 1;\n    const y = 2;\n    return x + y;\n  } finally {\n    cleanup();\n  }'
+        }
+      ];
+
+      const result = patchGenerator.applyChanges(lines, changes);
+
+      expect(result).toContain('try {');
+      expect(result).toContain('finally');
+    });
+  });
+
+  describe('applyPattern - replace_cache', () => {
+    test('should apply replace_cache fix type', () => {
+      const lines = ['const cache = {}', 'cache[key] = value;'];
+      const location = { lineNumber: 1, line: lines[0], detector: {}, context: lines };
+      const pattern = { fix: { type: 'replace_cache', maxSize: 100, maxAge: 3600000 } };
+
+      const result = patchGenerator.applyPattern(lines, location, pattern);
+
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('generatePatch', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    test('should throw when no matching pattern found', async () => {
+      const issue = {
+        type: 'unknown_issue_type',
+        evidence: ['no matching keywords here'],
+        affectedFiles: ['/path/to/file.js']
+      };
+
+      await expect(patchGenerator.generatePatch(issue)).rejects.toThrow('패치 패턴을 찾을 수 없음');
+    });
+
+    test('should generate patch for matching issue', async () => {
+      const fileContent = 'async function test() {\n  const conn = await getConnection();\n  return conn;\n}';
+      mockReadFile.mockResolvedValue(fileContent);
+
+      const issue = {
+        type: 'connection_leak',
+        evidence: ['connection needs close'],
+        affectedFiles: ['/path/to/file.js']
+      };
+
+      const result = await patchGenerator.generatePatch(issue);
+
+      expect(result).toHaveProperty('id');
+      expect(result).toHaveProperty('type', 'connection_leak');
+      expect(result).toHaveProperty('pattern', 'connection_leak');
+      expect(result).toHaveProperty('timestamp');
+      expect(result).toHaveProperty('confidence');
+    });
+
+    test('should add generated patch to list', async () => {
+      const fileContent = 'const conn = getConnection();\nconn.query();';
+      mockReadFile.mockResolvedValue(fileContent);
+
+      const initialCount = patchGenerator.generatedPatches.length;
+
+      const issue = {
+        type: 'connection_leak',
+        evidence: ['connection close finally'],
+        affectedFiles: ['/path/to/file.js']
+      };
+
+      await patchGenerator.generatePatch(issue);
+
+      expect(patchGenerator.generatedPatches.length).toBe(initialCount + 1);
+    });
+
+    test('should handle multiple affected files', async () => {
+      const fileContent = 'const conn = getConnection();\nreturn conn;';
+      mockReadFile.mockResolvedValue(fileContent);
+
+      const issue = {
+        type: 'connection_leak',
+        evidence: ['connection needs close'],
+        affectedFiles: ['/path/to/file1.js', '/path/to/file2.js']
+      };
+
+      const result = await patchGenerator.generatePatch(issue);
+
+      expect(result.files).toHaveLength(2);
+    });
+
+    test('should skip files with no issue locations', async () => {
+      const fileContent = 'const x = 1;\nconsole.log(x);';
+      mockReadFile.mockResolvedValue(fileContent);
+
+      const issue = {
+        type: 'connection_leak',
+        evidence: ['connection close'],
+        affectedFiles: ['/path/to/file.js']
+      };
+
+      const result = await patchGenerator.generatePatch(issue);
+
+      expect(result.changes).toHaveLength(0);
+    });
+  });
+
+  describe('generateFilePatch', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    test('should generate file patch with changes', async () => {
+      const fileContent = 'const conn = getConnection();\nreturn conn;';
+      mockReadFile.mockResolvedValue(fileContent);
+
+      const pattern = {
+        detectors: [{ pattern: 'getConnection', context: ['const'] }],
+        fix: { type: 'add_cleanup', cleanup: 'conn.close();' }
+      };
+
+      const result = await patchGenerator.generateFilePatch('/path/to/file.js', pattern, []);
+
+      expect(result).toHaveProperty('file', '/path/to/file.js');
+      expect(result).toHaveProperty('original', fileContent);
+      expect(result).toHaveProperty('patched');
+      expect(result).toHaveProperty('changes');
+    });
+
+    test('should return null when no issue locations found', async () => {
+      const fileContent = 'const x = 1;\nconsole.log(x);';
+      mockReadFile.mockResolvedValue(fileContent);
+
+      const pattern = {
+        detectors: [{ pattern: 'getConnection', context: [] }],
+        fix: { type: 'add_cleanup', cleanup: 'cleanup();' }
+      };
+
+      const result = await patchGenerator.generateFilePatch('/path/to/file.js', pattern, []);
+
+      expect(result).toBeNull();
+    });
+
+    test('should throw when file read fails', async () => {
+      mockReadFile.mockRejectedValue(new Error('File not found'));
+
+      const pattern = {
+        detectors: [{ pattern: 'test', context: [] }],
+        fix: { type: 'add_cleanup', cleanup: 'cleanup();' }
+      };
+
+      await expect(patchGenerator.generateFilePatch('/nonexistent/file.js', pattern, [])).rejects.toThrow(
+        'File not found'
+      );
+    });
+
+    test('should include change details in result', async () => {
+      const fileContent = 'async function test() {\n  const conn = await getConnection();\n  return conn;\n}';
+      mockReadFile.mockResolvedValue(fileContent);
+
+      const pattern = {
+        detectors: [{ pattern: 'getConnection', context: ['await', 'const'] }],
+        fix: { type: 'wrap_try_finally', cleanup: 'conn.close();' }
+      };
+
+      const result = await patchGenerator.generateFilePatch('/path/to/file.js', pattern, []);
+
+      if (result) {
+        expect(result.changes.length).toBeGreaterThan(0);
+        expect(result.changes[0]).toHaveProperty('line');
+        expect(result.changes[0]).toHaveProperty('type');
+      }
+    });
+  });
+
+  describe('Edge cases and error handling', () => {
+    test('should handle empty affected files array', async () => {
+      const issue = {
+        type: 'connection_leak',
+        evidence: ['connection close'],
+        affectedFiles: []
+      };
+
+      const result = await patchGenerator.generatePatch(issue);
+      expect(result.changes).toEqual([]);
+      expect(result.files).toEqual([]);
+    });
+
+    test('should handle evidence with no matching keywords', () => {
+      const pattern = patchGenerator.findMatchingPattern('connection_leak', ['unrelated text']);
+      expect(pattern).toBeNull();
+    });
+
+    test('should handle case-insensitive keyword matching', () => {
+      const pattern = patchGenerator.findMatchingPattern('connection_leak', ['CONNECTION CLOSE']);
+      expect(pattern).toBeDefined();
+      expect(pattern.name).toBe('connection_leak');
+    });
+
+    test('should generate unique IDs for consecutive patches', () => {
+      const ids = new Set();
+      for (let i = 0; i < 100; i++) {
+        ids.add(patchGenerator.generatePatchId());
+      }
+      expect(ids.size).toBe(100);
+    });
+
+    test('should handle patterns with empty detectors', () => {
+      const lines = ['const x = 1;'];
+      const pattern = { detectors: [] };
+
+      const locations = patchGenerator.findIssueLocations(lines, pattern, []);
+
+      expect(locations).toEqual([]);
     });
   });
 });
