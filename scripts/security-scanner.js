@@ -199,7 +199,11 @@ class SecurityScanner {
       /node_modules\//,
       /dist\//,
       /build\//,
-      /coverage\//
+      /coverage\//,
+      // Skip security-related scripts that contain detection patterns
+      /scripts\/pr-reviewer\.js$/,
+      /scripts\/security-scanner\.js$/,
+      /scripts\/auto-merger\.js$/
     ];
 
     return skipPatterns.some((pattern) => pattern.test(file));
