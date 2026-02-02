@@ -1,0 +1,55 @@
+{
+  "allowedCommands": [
+    "ps",
+    "top",
+    "htop",
+    "free",
+    "df",
+    "du",
+    "ls",
+    "cat",
+    "tail",
+    "head",
+    "grep",
+    "awk",
+    "sed",
+    "netstat",
+    "ss",
+    "lsof",
+    "iostat",
+    "vmstat",
+    "systemctl",
+    "journalctl",
+    "docker",
+    "kubectl",
+    "curl",
+    "wget",
+    "ping",
+    "traceroute",
+    "nslookup",
+    "dig"
+  ],
+  "requireApproval": [
+    "systemctl restart",
+    "systemctl stop",
+    "docker restart",
+    "docker stop",
+    "kill",
+    "pkill",
+    "reboot",
+    "shutdown"
+  ],
+  "forbidden": [
+    "rm -rf /",
+    "dd if=/dev/zero",
+    "mkfs",
+    "fdisk",
+    "parted",
+    ":(){:|:&};:"
+  ],
+  "commandLimits": {
+    "maxOutputSize": 10485760,
+    "maxExecutionTime": 300000,
+    "maxConcurrentCommands": 50
+  }
+}

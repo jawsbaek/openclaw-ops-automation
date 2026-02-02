@@ -1,0 +1,44 @@
+{
+  "name": "openclaw-ops-automation",
+  "version": "1.0.0",
+  "description": "OpenClaw-based distributed operations monitoring and automation system",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest --coverage",
+    "test:watch": "NODE_OPTIONS='--experimental-vm-modules' jest --watch",
+    "lint": "eslint ops-automation/**/*.js",
+    "docs": "jsdoc -c jsdoc.json",
+    "start:orchestrator": "node ops-automation/agents/orchestrator.js",
+    "start:metrics": "node ops-automation/agents/metrics-collector.js",
+    "start:logs": "node ops-automation/agents/logs-analyzer.js",
+    "start:alert": "node ops-automation/agents/alert-handler.js",
+    "start:autoheal": "node ops-automation/agents/autoheal.js",
+    "start:reporter": "node ops-automation/agents/reporter.js"
+  },
+  "keywords": [
+    "openclaw",
+    "automation",
+    "monitoring",
+    "ops",
+    "devops",
+    "ai-agents"
+  ],
+  "author": "OpenClaw Community",
+  "license": "MIT",
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@babel/preset-env": "^7.24.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "jsdoc": "^4.0.2"
+  },
+  "dependencies": {
+    "axios": "^1.6.7",
+    "node-cron": "^3.0.3",
+    "winston": "^3.11.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

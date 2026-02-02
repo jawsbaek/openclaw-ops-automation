@@ -1,0 +1,57 @@
+{
+  "groups": {
+    "web": [
+      "web1.example.com",
+      "web2.example.com",
+      "web3.example.com"
+    ],
+    "db": [
+      "db-master.example.com",
+      "db-replica.example.com"
+    ],
+    "cache": [
+      "redis1.example.com",
+      "redis2.example.com"
+    ],
+    "queue": [
+      "rabbitmq1.example.com"
+    ],
+    "production": [
+      "web1.example.com",
+      "web2.example.com",
+      "db-master.example.com",
+      "redis1.example.com"
+    ]
+  },
+  "ssh": {
+    "user": "ops-bot",
+    "key_path": "/secure/ssh-keys/ops-bot.pem",
+    "port": 22,
+    "connect_timeout": 10000,
+    "command_timeout": 30000
+  },
+  "metadata": {
+    "web1.example.com": {
+      "role": "web-server",
+      "datacenter": "us-west-1",
+      "environment": "production"
+    },
+    "web2.example.com": {
+      "role": "web-server",
+      "datacenter": "us-west-2",
+      "environment": "production"
+    },
+    "db-master.example.com": {
+      "role": "database",
+      "type": "primary",
+      "datacenter": "us-west-1",
+      "environment": "production"
+    },
+    "db-replica.example.com": {
+      "role": "database",
+      "type": "replica",
+      "datacenter": "us-west-2",
+      "environment": "production"
+    }
+  }
+}
