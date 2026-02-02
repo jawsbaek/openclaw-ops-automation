@@ -1,19 +1,21 @@
 # Multi-stage build for OpenClaw Ops Automation
 
 # Stage 1: Base
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 WORKDIR /app
-RUN apk add --no-cache bash curl
+RUN apk add --no-cache bash curl && \
+    corepack enable && \
+    corepack prepare pnpm@latest --activate
 
 # Stage 2: Dependencies
 FROM base AS dependencies
-COPY package*.json ./
-RUN npm ci --only=production
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --prod --frozen-lockfile
 
 # Stage 3: Development dependencies
 FROM base AS dev-dependencies
-COPY package*.json ./
-RUN npm ci
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
 # Stage 4: Build (for future TypeScript support)
 FROM dev-dependencies AS build

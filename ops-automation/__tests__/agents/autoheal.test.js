@@ -2,37 +2,37 @@
  * @fileoverview Tests for AutoHeal Agent
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 // Mock child_process exec
-const mockExecAsync = jest.fn();
+const mockExecAsync = vi.fn();
 
 // Mock dependencies before imports
-jest.unstable_mockModule('node:child_process', () => ({
-  exec: jest.fn() // This won't be used directly
+vi.mock('node:child_process', () => ({
+  exec: vi.fn() // This won't be used directly
 }));
 
-jest.unstable_mockModule('node:util', () => ({
+vi.mock('node:util', () => ({
   promisify: () => mockExecAsync
 }));
 
-const mockLoadAutoHealPlaybooks = jest.fn();
-const mockSaveIncident = jest.fn();
+const mockLoadAutoHealPlaybooks = vi.fn();
+const mockSaveIncident = vi.fn();
 const mockLogger = {
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn()
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn()
 };
 
-jest.unstable_mockModule('../../lib/config-loader.js', () => ({
+vi.mock('../../lib/config-loader.js', () => ({
   loadAutoHealPlaybooks: mockLoadAutoHealPlaybooks
 }));
 
-jest.unstable_mockModule('../../lib/file-utils.js', () => ({
+vi.mock('../../lib/file-utils.js', () => ({
   saveIncident: mockSaveIncident
 }));
 
-jest.unstable_mockModule('../../lib/logger.js', () => ({
+vi.mock('../../lib/logger.js', () => ({
   createLogger: () => mockLogger
 }));
 
@@ -41,7 +41,7 @@ const { heal } = await import('../../agents/autoheal.js');
 
 describe('AutoHeal Agent', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockSaveIncident.mockReturnValue('/path/to/incident.md');
     mockExecAsync.mockReset();
   });

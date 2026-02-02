@@ -2,17 +2,17 @@
  * SSH Connection Pool Tests
  */
 
-import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // Mock ssh2
 const mockClient = {
-  connect: jest.fn(),
-  end: jest.fn(),
-  on: jest.fn()
+  connect: vi.fn(),
+  end: vi.fn(),
+  on: vi.fn()
 };
 
-jest.unstable_mockModule('ssh2', () => ({
-  Client: jest.fn(() => mockClient)
+vi.mock('ssh2', () => ({
+  Client: vi.fn(() => mockClient)
 }));
 
 const { default: SSHConnectionPool } = await import('../../../src/ssh/connection-pool.js');
@@ -21,20 +21,20 @@ describe('SSHConnectionPool', () => {
   let pool;
 
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     pool = new SSHConnectionPool({
       maxConnections: 10,
       idleTimeout: 60000,
       connectTimeout: 5000
     });
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
     if (pool) {
       pool.closeAll();
     }
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   describe('constructor', () => {
@@ -91,7 +91,7 @@ describe('SSHConnectionPool', () => {
 
   describe('closeConnection()', () => {
     test('should close and remove specific connection', () => {
-      const mockEnd = jest.fn();
+      const mockEnd = vi.fn();
       const conn = {
         client: { end: mockEnd },
         host: 'server1',
@@ -114,8 +114,8 @@ describe('SSHConnectionPool', () => {
 
   describe('closeAll()', () => {
     test('should close all connections', () => {
-      const mockEnd1 = jest.fn();
-      const mockEnd2 = jest.fn();
+      const mockEnd1 = vi.fn();
+      const mockEnd2 = vi.fn();
 
       pool.connections.set('server1', { client: { end: mockEnd1 } });
       pool.connections.set('server2', { client: { end: mockEnd2 } });
@@ -133,8 +133,8 @@ describe('SSHConnectionPool', () => {
   describe('cleanup()', () => {
     test('should remove idle connections', () => {
       const now = Date.now();
-      const mockEnd1 = jest.fn();
-      const mockEnd2 = jest.fn();
+      const mockEnd1 = vi.fn();
+      const mockEnd2 = vi.fn();
 
       // Old idle connection
       pool.connections.set('server1', {
@@ -160,7 +160,7 @@ describe('SSHConnectionPool', () => {
     });
 
     test('should not remove connections in use', () => {
-      const mockEnd = jest.fn();
+      const mockEnd = vi.fn();
       const now = Date.now();
 
       pool.connections.set('server1', {
@@ -179,7 +179,7 @@ describe('SSHConnectionPool', () => {
   describe('getStatus()', () => {
     test('should return pool status', () => {
       const now = Date.now();
-      const mockEnd = jest.fn();
+      const mockEnd = vi.fn();
       pool.connections.set('server1', {
         client: { end: mockEnd },
         host: 'server1',

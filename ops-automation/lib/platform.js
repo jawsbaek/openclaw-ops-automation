@@ -110,8 +110,11 @@ export function getNetworkCommand() {
  * @returns {boolean} True if command exists
  */
 export function isCommandAvailable(command) {
-  const platform = getPlatform();
+  if (!command || typeof command !== 'string' || command.trim() === '') {
+    return false;
+  }
 
+  const platform = getPlatform();
   const checkCommand = platform === 'win32' ? `where ${command}` : `command -v ${command}`;
 
   try {

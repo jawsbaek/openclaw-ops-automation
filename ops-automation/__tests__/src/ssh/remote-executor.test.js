@@ -2,15 +2,19 @@
  * Remote Executor Tests
  */
 
-import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // Mock dependencies
-jest.unstable_mockModule('../../../src/ssh/connection-pool.js', () => ({
-  default: jest.fn().mockImplementation(() => ({
-    getConnection: jest.fn(),
-    releaseConnection: jest.fn(),
-    closeAll: jest.fn()
-  }))
+class MockConnectionPool {
+  constructor() {
+    this.getConnection = vi.fn();
+    this.releaseConnection = vi.fn();
+    this.closeAll = vi.fn();
+  }
+}
+
+vi.mock('../../../src/ssh/connection-pool.js', () => ({
+  default: MockConnectionPool
 }));
 
 const { default: RemoteExecutor } = await import('../../../src/ssh/remote-executor.js');
@@ -46,7 +50,7 @@ describe('RemoteExecutor', () => {
 
     executor = new RemoteExecutor(mockServersConfig, mockWhitelistConfig);
     _mockConnectionPool = executor.connectionPool;
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {

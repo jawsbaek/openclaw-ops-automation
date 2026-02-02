@@ -2,18 +2,18 @@
  * @fileoverview Tests for Logs Analyzer Agent
  */
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 // Mock modules before importing
-const mockExistsSync = jest.fn();
-const mockReadFileSync = jest.fn();
-const mockMkdirSync = jest.fn();
-const mockReaddirSync = jest.fn();
-const mockWriteFileSync = jest.fn();
-const mockLoadMonitoringSources = jest.fn();
-const mockSaveAnalysis = jest.fn();
+const mockExistsSync = vi.fn();
+const mockReadFileSync = vi.fn();
+const mockMkdirSync = vi.fn();
+const mockReaddirSync = vi.fn();
+const mockWriteFileSync = vi.fn();
+const mockLoadMonitoringSources = vi.fn();
+const mockSaveAnalysis = vi.fn();
 
-jest.unstable_mockModule('node:fs', () => ({
+vi.mock('node:fs', () => ({
   existsSync: mockExistsSync,
   readFileSync: mockReadFileSync,
   mkdirSync: mockMkdirSync,
@@ -21,11 +21,11 @@ jest.unstable_mockModule('node:fs', () => ({
   writeFileSync: mockWriteFileSync
 }));
 
-jest.unstable_mockModule('../../lib/config-loader.js', () => ({
+vi.mock('../../lib/config-loader.js', () => ({
   loadMonitoringSources: mockLoadMonitoringSources
 }));
 
-jest.unstable_mockModule('../../lib/file-utils.js', () => ({
+vi.mock('../../lib/file-utils.js', () => ({
   saveAnalysis: mockSaveAnalysis
 }));
 
@@ -34,7 +34,7 @@ const { analyzeLogs } = await import('../../agents/logs-analyzer.js');
 
 describe('Logs Analyzer', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('analyzeLogs', () => {
