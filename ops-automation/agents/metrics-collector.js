@@ -4,6 +4,7 @@
  */
 
 import { exec } from 'node:child_process';
+import os from 'node:os';
 import { promisify } from 'node:util';
 import axios from 'axios';
 import { loadMonitoringSources } from '../lib/config-loader.js';
@@ -30,21 +31,24 @@ async function collectCPU() {
 
 /**
  * Collects memory usage statistics
- * @returns {Promise<Object>} Memory usage object with total, used, and percentage
+ * @returns {Promise<Object>} Memory usage object with total, used, free, and percentage
  */
 async function collectMemory() {
   try {
-    const { stdout } = await execAsync("vm_stat | grep 'Pages' | head -5");
-    const _lines = stdout.split('\n');
+    const total = os.totalmem();
+    const free = os.freemem();
+    const used = total - free;
+    const percentage = total > 0 ? Math.round((used / total) * 100) : 0;
 
     return {
-      total: 16000,
-      used: 8000,
-      percentage: 50
+      total,
+      used,
+      free,
+      percentage
     };
   } catch (error) {
     logger.warn('Failed to collect memory metrics', { error: error.message });
-    return { total: 0, used: 0, percentage: 0 };
+    return { total: 0, used: 0, free: 0, percentage: 0 };
   }
 }
 

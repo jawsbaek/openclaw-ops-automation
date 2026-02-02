@@ -13,6 +13,164 @@ const execAsync = promisify(exec);
 const logger = createLogger('autoheal');
 
 /**
+ * Allowed scenario names (allowlist approach)
+ */
+const ALLOWED_SCENARIOS = ['disk_space_low', 'process_down', 'memory_leak', 'api_slow', 'ssl_expiring'];
+
+/**
+ * Allowed context variable names (for sanitization)
+ */
+const ALLOWED_CONTEXT_KEYS = [
+  'disk_usage',
+  'memory_usage',
+  'process_name',
+  'process_status',
+  'api_latency_ms',
+  'ssl_expires_in_days'
+];
+
+/**
+ * Validates scenario name against allowlist
+ * @param {string} scenario - Scenario name to validate
+ * @returns {boolean} Whether scenario is valid
+ */
+function validateScenario(scenario) {
+  if (typeof scenario !== 'string') {
+    logger.error('Validation failed: scenario must be a string', { scenario });
+    return false;
+  }
+
+  if (scenario.length === 0 || scenario.length > 50) {
+    logger.error('Validation failed: scenario length invalid', { scenario });
+    return false;
+  }
+
+  // Allowlist check
+  if (!ALLOWED_SCENARIOS.includes(scenario)) {
+    logger.error('Validation failed: scenario not in allowlist', { scenario });
+    return false;
+  }
+
+  // Additional pattern check (alphanumeric and underscore only)
+  if (!/^[a-z0-9_]+$/.test(scenario)) {
+    logger.error('Validation failed: scenario contains invalid characters', { scenario });
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Validates and sanitizes context object
+ * @param {Object} context - Context data to validate
+ * @returns {Object} Sanitized context or throws error
+ */
+function validateContext(context) {
+  if (typeof context !== 'object' || context === null) {
+    throw new Error('Context must be a non-null object');
+  }
+
+  const sanitized = {};
+
+  for (const [key, value] of Object.entries(context)) {
+    // Validate key is in allowlist
+    if (!ALLOWED_CONTEXT_KEYS.includes(key)) {
+      logger.warn('Validation: ignoring unknown context key', { key });
+      continue;
+    }
+
+    // Validate and sanitize based on expected type
+    if (key === 'process_name') {
+      // String: alphanumeric, dash, underscore, dot only
+      if (typeof value !== 'string') {
+        throw new Error(`Context key '${key}' must be a string`);
+      }
+      if (!/^[a-zA-Z0-9._-]+$/.test(value)) {
+        throw new Error(`Context key '${key}' contains invalid characters`);
+      }
+      if (value.length > 100) {
+        throw new Error(`Context key '${key}' exceeds maximum length`);
+      }
+      sanitized[key] = value;
+    } else if (key === 'process_status') {
+      // Enum: only specific values allowed
+      const allowedStatuses = ['running', 'stopped', 'crashed'];
+      if (!allowedStatuses.includes(value)) {
+        throw new Error(`Context key '${key}' has invalid value: ${value}`);
+      }
+      sanitized[key] = value;
+    } else {
+      // Numeric: validate as number
+      const numValue = Number(value);
+      if (!Number.isFinite(numValue)) {
+        throw new Error(`Context key '${key}' must be a finite number`);
+      }
+      if (numValue < 0 || numValue > 1000000) {
+        throw new Error(`Context key '${key}' value out of range`);
+      }
+      sanitized[key] = numValue;
+    }
+  }
+
+  return sanitized;
+}
+
+/**
+ * Sanitizes a command string by validating variable substitutions
+ * @param {string} command - Command template
+ * @param {Object} context - Context for variable substitution
+ * @returns {string} Sanitized command
+ */
+function sanitizeCommand(command, context) {
+  if (typeof command !== 'string') {
+    throw new Error('Command must be a string');
+  }
+
+  if (command.length > 500) {
+    throw new Error('Command exceeds maximum length');
+  }
+
+  // Detect dangerous patterns (shell injection attempts)
+  const dangerousPatterns = [
+    /[;&|`$()]/g, // Shell metacharacters
+    /\$\{/g, // Variable expansion
+    /\$\(/g, // Command substitution
+    />>/g, // Redirection
+    /<</g, // Here-doc
+    /\|\|/g, // Logical OR
+    /&&/g // Logical AND (except in playbook commands)
+  ];
+
+  // Check for dangerous patterns outside of allowed playbook commands
+  let processedCommand = command;
+  for (const [key, value] of Object.entries(context)) {
+    processedCommand = processedCommand.replace(`{${key}}`, String(value));
+  }
+
+  // Allow && only in predefined playbook commands
+  const allowedCommandPatterns = [
+    /^find .+ -delete$/,
+    /^docker system prune -f$/,
+    /^pkill -f '.+' && systemctl start .+$/,
+    /^certbot renew --quiet$/,
+    /^nginx -s reload$/
+  ];
+
+  const isAllowedCommand = allowedCommandPatterns.some((pattern) => pattern.test(processedCommand));
+
+  if (!isAllowedCommand) {
+    // Stricter validation for non-whitelisted commands
+    for (const pattern of dangerousPatterns) {
+      if (pattern.test(processedCommand)) {
+        throw new Error(`Command contains dangerous pattern: ${pattern.source}`);
+      }
+    }
+  }
+
+  return processedCommand;
+}
+
+/**
  * Evaluates a condition string (simple implementation)
  * @param {string} condition - Condition string to evaluate
  * @param {Object} context - Context variables
@@ -55,15 +213,15 @@ function evaluateCondition(condition, context) {
  * @returns {Promise<Object>} Execution result
  */
 async function executeAction(command, context = {}) {
-  // Substitute variables in command
-  let processedCommand = command;
-  for (const [key, value] of Object.entries(context)) {
-    processedCommand = processedCommand.replace(`{${key}}`, value);
-  }
-
-  logger.info('Executing healing action', { command: processedCommand });
-
   try {
+    // Validate and sanitize context first
+    const sanitizedContext = validateContext(context);
+
+    // Sanitize command with validated context
+    const processedCommand = sanitizeCommand(command, sanitizedContext);
+
+    logger.info('Executing healing action', { command: processedCommand });
+
     const { stdout, stderr } = await execAsync(processedCommand, {
       timeout: 30000, // 30 second timeout
       shell: '/bin/bash'
@@ -77,13 +235,13 @@ async function executeAction(command, context = {}) {
     };
   } catch (error) {
     logger.error('Action execution failed', {
-      command: processedCommand,
+      command: command,
       error: error.message
     });
 
     return {
       success: false,
-      command: processedCommand,
+      command: command,
       error: error.message,
       stdout: error.stdout?.trim() || '',
       stderr: error.stderr?.trim() || ''
@@ -135,6 +293,32 @@ export async function heal(scenario, context = {}) {
   const incidentId = `heal-${Date.now()}`;
 
   logger.info('Starting AutoHeal', { incidentId, scenario, context });
+
+  // Validate scenario input
+  if (!validateScenario(scenario)) {
+    logger.error('Invalid scenario name', { scenario });
+    return {
+      incidentId,
+      scenario,
+      success: false,
+      reason: `Invalid scenario name - must be one of: ${ALLOWED_SCENARIOS.join(', ')}`,
+      duration: 0
+    };
+  }
+
+  // Validate context input
+  try {
+    context = validateContext(context);
+  } catch (error) {
+    logger.error('Invalid context data', { error: error.message, context });
+    return {
+      incidentId,
+      scenario,
+      success: false,
+      reason: `Invalid context data: ${error.message}`,
+      duration: 0
+    };
+  }
 
   const startTime = Date.now();
   const playbook = findPlaybook(scenario, context);
@@ -243,7 +427,17 @@ function generateIncidentReport(result, context) {
  * Run AutoHeal if executed directly
  */
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const scenario = process.argv[2] || 'disk_space_low';
+  // Validate CLI argument (external input)
+  const rawScenario = process.argv[2] || 'disk_space_low';
+
+  if (!validateScenario(rawScenario)) {
+    logger.error('Invalid scenario from CLI', { scenario: rawScenario });
+    console.error(`Error: Invalid scenario '${rawScenario}'`);
+    console.error(`Allowed scenarios: ${ALLOWED_SCENARIOS.join(', ')}`);
+    process.exit(1);
+  }
+
+  const scenario = rawScenario;
   const context = { disk_usage: 95 }; // Example context
 
   heal(scenario, context)

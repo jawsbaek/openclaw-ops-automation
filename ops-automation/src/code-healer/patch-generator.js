@@ -3,9 +3,8 @@
  * 진단 결과를 기반으로 자동 패치 생성
  */
 
-const fs = require('node:fs').promises;
-const _path = require('node:path');
-const logger = require('../../lib/logger');
+import { promises as fs } from 'node:fs';
+import logger from '../../lib/logger.js';
 
 class PatchGenerator {
   constructor(patternsConfig) {
@@ -463,4 +462,4 @@ class PatchGenerator {
   }
 }
 
-module.exports = PatchGenerator;
+export default PatchGenerator;
