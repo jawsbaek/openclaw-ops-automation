@@ -523,6 +523,137 @@ describe('AutoHeal Agent', () => {
   });
 
   describe('Command Sanitization', () => {
+    it('should reject command with dangerous shell metacharacters', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        disk_space_low: {
+          actions: ['echo test; rm -rf /']
+        }
+      });
+
+      const result = await heal('disk_space_low', { disk_usage: 95 });
+
+      expect(result.success).toBe(false);
+      expect(result.actions[0].error).toContain('dangerous pattern');
+    });
+
+    it('should reject command with pipe operator', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        disk_space_low: {
+          actions: ['cat /etc/passwd | grep root']
+        }
+      });
+
+      const result = await heal('disk_space_low', { disk_usage: 95 });
+
+      expect(result.success).toBe(false);
+      expect(result.actions[0].error).toContain('dangerous pattern');
+    });
+
+    it('should reject command with command substitution', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        disk_space_low: {
+          actions: ['echo $(whoami)']
+        }
+      });
+
+      const result = await heal('disk_space_low', { disk_usage: 95 });
+
+      expect(result.success).toBe(false);
+      expect(result.actions[0].error).toContain('dangerous pattern');
+    });
+
+    it('should reject command with variable expansion', async () => {
+      const dangerousCommand = 'echo $' + '{HOME}';
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        disk_space_low: {
+          actions: [dangerousCommand]
+        }
+      });
+
+      const result = await heal('disk_space_low', { disk_usage: 95 });
+
+      expect(result.success).toBe(false);
+      expect(result.actions[0].error).toContain('dangerous pattern');
+    });
+
+    it('should reject command with backticks', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        disk_space_low: {
+          actions: ['echo `whoami`']
+        }
+      });
+
+      const result = await heal('disk_space_low', { disk_usage: 95 });
+
+      expect(result.success).toBe(false);
+      expect(result.actions[0].error).toContain('dangerous pattern');
+    });
+
+    it('should reject command with redirection', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        disk_space_low: {
+          actions: ['echo test >> /tmp/file']
+        }
+      });
+
+      const result = await heal('disk_space_low', { disk_usage: 95 });
+
+      expect(result.success).toBe(false);
+      expect(result.actions[0].error).toContain('dangerous pattern');
+    });
+
+    it('should reject non-whitelisted command with &&', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        disk_space_low: {
+          actions: ['echo test && echo danger']
+        }
+      });
+
+      const result = await heal('disk_space_low', { disk_usage: 95 });
+
+      expect(result.success).toBe(false);
+      expect(result.actions[0].error).toContain('dangerous pattern');
+    });
+
+    it('should reject non-whitelisted command with ||', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        disk_space_low: {
+          actions: ['false || echo fallback']
+        }
+      });
+
+      const result = await heal('disk_space_low', { disk_usage: 95 });
+
+      expect(result.success).toBe(false);
+      expect(result.actions[0].error).toContain('dangerous pattern');
+    });
+
+    it('should reject command exceeding max length', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        disk_space_low: {
+          actions: ['a'.repeat(501)]
+        }
+      });
+
+      const result = await heal('disk_space_low', { disk_usage: 95 });
+
+      expect(result.success).toBe(false);
+      expect(result.actions[0].error).toContain('exceeds maximum length');
+    });
+
+    it('should reject non-string command', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        disk_space_low: {
+          actions: [123]
+        }
+      });
+
+      const result = await heal('disk_space_low', { disk_usage: 95 });
+
+      expect(result.success).toBe(false);
+      expect(result.actions[0].error).toContain('must be a string');
+    });
+
     it('should allow whitelisted playbook commands with &&', async () => {
       mockLoadAutoHealPlaybooks.mockReturnValue({
         process_down: {
@@ -676,6 +807,143 @@ describe('AutoHeal Agent', () => {
       expect(savedReport).toContain('### 2. ✅');
       expect(savedReport).toContain('deleted 10 files');
       expect(savedReport).toContain('pruned containers');
+    });
+  });
+
+  describe('Playbook Condition Matching', () => {
+    it('should find playbook by matching condition when no direct scenario match', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        other_scenario: {
+          condition: 'disk_usage > 90',
+          actions: ['find /tmp -type f -mtime +7 -delete']
+        }
+      });
+
+      mockExecAsync.mockResolvedValue({ stdout: 'cleaned', stderr: '' });
+
+      const result = await heal('disk_space_low', { disk_usage: 95 });
+
+      expect(result.success).toBe(true);
+      expect(result.playbook).toBe('other_scenario');
+    });
+
+    it('should use first matching condition playbook', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        playbook_a: {
+          condition: 'disk_usage > 90',
+          actions: ['echo "a"']
+        },
+        playbook_b: {
+          condition: 'disk_usage > 80',
+          actions: ['echo "b"']
+        }
+      });
+
+      mockExecAsync.mockResolvedValue({ stdout: 'ok', stderr: '' });
+
+      const result = await heal('disk_space_low', { disk_usage: 95 });
+
+      expect(result.success).toBe(true);
+      expect(result.playbook).toBe('playbook_a');
+    });
+  });
+
+  describe('Unknown Operator Handling', () => {
+    it('should return false for operator not matching regex pattern', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        disk_space_low: {
+          condition: 'disk_usage <> 90',
+          actions: ['echo "cleanup"']
+        }
+      });
+
+      const result = await heal('disk_space_low', { disk_usage: 95 });
+
+      expect(result.success).toBe(false);
+      expect(result.reason).toBe('No applicable playbook found');
+    });
+
+    it('should return false for unknown operator like !=', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        disk_space_low: {
+          condition: 'disk_usage != 90',
+          actions: ['echo "cleanup"']
+        }
+      });
+
+      const result = await heal('disk_space_low', { disk_usage: 95 });
+
+      expect(result.success).toBe(false);
+      expect(result.reason).toBe('No applicable playbook found');
+    });
+
+    it('should handle malformed condition', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        disk_space_low: {
+          condition: 'invalid condition format',
+          actions: ['echo "cleanup"']
+        }
+      });
+
+      const result = await heal('disk_space_low', { disk_usage: 95 });
+
+      expect(result.success).toBe(false);
+      expect(result.reason).toBe('No applicable playbook found');
+    });
+
+    it('should handle missing context variable in condition', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        disk_space_low: {
+          condition: 'memory_usage > 90',
+          actions: ['echo "cleanup"']
+        }
+      });
+
+      const result = await heal('disk_space_low', { disk_usage: 95 });
+
+      expect(result.success).toBe(false);
+      expect(result.reason).toBe('No applicable playbook found');
+    });
+  });
+
+  describe('Unknown Context Keys', () => {
+    it('should ignore unknown context keys and warn', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        disk_space_low: {
+          actions: ['find /tmp -type f -mtime +7 -delete']
+        }
+      });
+
+      mockExecAsync.mockResolvedValue({ stdout: 'cleaned', stderr: '' });
+
+      const result = await heal('disk_space_low', {
+        disk_usage: 95,
+        unknown_key: 'value'
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        'Validation: ignoring unknown context key',
+        expect.objectContaining({ key: 'unknown_key' })
+      );
+    });
+
+    it('should process valid keys and skip unknown keys', async () => {
+      mockLoadAutoHealPlaybooks.mockReturnValue({
+        disk_space_low: {
+          actions: ['echo "disk at {disk_usage}%"']
+        }
+      });
+
+      mockExecAsync.mockResolvedValue({ stdout: 'disk at 95%', stderr: '' });
+
+      const result = await heal('disk_space_low', {
+        disk_usage: 95,
+        invalid_key1: 'ignored',
+        invalid_key2: 123
+      });
+
+      expect(result.success).toBe(true);
     });
   });
 
