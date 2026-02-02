@@ -39,15 +39,25 @@ jobs:
       - name: Run Biome Lint
         id: eslint
         run: |
+          echo "=== Biome version ==="
+          npx biome --version || echo "Biome not found"
+          echo "=== Running lint ==="
           npm run lint 2>&1 | tee lint-output.txt
-          echo "result=$(cat lint-output.txt)" >> $GITHUB_OUTPUT
+          LINT_EXIT_CODE=${PIPESTATUS[0]}
+          echo "=== Lint exit code: $LINT_EXIT_CODE ==="
+          cat lint-output.txt
+          exit $LINT_EXIT_CODE
         continue-on-error: true
 
       - name: Run Tests
         id: tests
         run: |
+          echo "=== Running tests ==="
           npm test -- --coverage --coverageReporters=json-summary 2>&1 | tee test-output.txt
-          echo "result=$(cat test-output.txt)" >> $GITHUB_OUTPUT
+          TEST_EXIT_CODE=${PIPESTATUS[0]}
+          echo "=== Test exit code: $TEST_EXIT_CODE ==="
+          tail -50 test-output.txt
+          exit $TEST_EXIT_CODE
         continue-on-error: true
 
       - name: Check Coverage
@@ -128,15 +138,23 @@ jobs:
       - name: Scan for Secrets
         id: secrets
         run: |
+          echo "=== Running secrets scan ==="
           node scripts/security-scanner.js secrets 2>&1 | tee secrets-output.txt
-          echo "result=$(cat secrets-output.txt)" >> $GITHUB_OUTPUT
+          SECRETS_EXIT_CODE=${PIPESTATUS[0]}
+          echo "=== Secrets scan exit code: $SECRETS_EXIT_CODE ==="
+          cat secrets-output.txt
+          exit $SECRETS_EXIT_CODE
         continue-on-error: true
 
       - name: Check Command Injection Patterns
         id: injection
         run: |
+          echo "=== Running injection scan ==="
           node scripts/security-scanner.js injection 2>&1 | tee injection-output.txt
-          echo "result=$(cat injection-output.txt)" >> $GITHUB_OUTPUT
+          INJECTION_EXIT_CODE=${PIPESTATUS[0]}
+          echo "=== Injection scan exit code: $INJECTION_EXIT_CODE ==="
+          cat injection-output.txt
+          exit $INJECTION_EXIT_CODE
         continue-on-error: true
 
       - name: Comment Security Results
