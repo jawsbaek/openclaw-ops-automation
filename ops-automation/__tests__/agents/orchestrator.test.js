@@ -410,6 +410,28 @@ describe('Orchestrator Agent', () => {
 
       expect(vi.getTimerCount()).toBeGreaterThan(0);
     });
+
+    test('should catch thrown errors in interval callback and log them', async () => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+
+      const originalSetInterval = global.setInterval;
+      let intervalCallback = null;
+      vi.spyOn(global, 'setInterval').mockImplementation((fn, delay) => {
+        intervalCallback = fn;
+        const id = originalSetInterval(fn, delay);
+        activeIntervals.push(id);
+        return id;
+      });
+
+      await start(60000);
+
+      expect(intervalCallback).toBeDefined();
+
+      await intervalCallback();
+
+      expect(global.setInterval).toHaveBeenCalled();
+    });
   });
 
   describe('Report Generation', () => {
@@ -512,6 +534,37 @@ describe('Orchestrator Agent', () => {
       const reportTask = result.results.find((r) => r.task === 'report-generation');
       const weeklyReport = reportTask.reports.find((r) => r.type === 'weekly');
       expect(weeklyReport).toBeUndefined();
+    });
+
+    test('should not generate weekly report if already run within 6 days', async () => {
+      generateReport.mockReset();
+      generateReport.mockResolvedValue({ reportPath: '/tmp/report.md' });
+
+      const mondayNineAM = new Date();
+      while (mondayNineAM.getDay() !== 1) {
+        mondayNineAM.setDate(mondayNineAM.getDate() + 1);
+      }
+      mondayNineAM.setHours(9, 0, 0, 0);
+
+      vi.setSystemTime(mondayNineAM);
+      const result1 = await heartbeat();
+
+      const reportTask1 = result1.results.find((r) => r.task === 'report-generation');
+      const dailyReport = reportTask1.reports.find((r) => r.type === 'daily');
+      expect(dailyReport).toBeDefined();
+      expect(dailyReport.success).toBe(true);
+
+      const mondayTenAM = new Date(mondayNineAM);
+      mondayTenAM.setHours(10, 0, 0, 0);
+      vi.setSystemTime(mondayTenAM);
+
+      const result2 = await heartbeat();
+
+      const reportTask2 = result2.results.find((r) => r.task === 'report-generation');
+      expect(reportTask2).toBeDefined();
+
+      const weeklyReport2 = reportTask2.reports.find((r) => r.type === 'weekly');
+      expect(weeklyReport2).toBeUndefined();
     });
   });
 
