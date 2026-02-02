@@ -3,7 +3,9 @@
  * 배포 실패 시 자동 롤백
  */
 
-const logger = require('../../lib/logger');
+import createLogger from "../../lib/logger.js";
+
+const logger = createLogger("rollback");
 
 class RollbackSystem {
   constructor(sshExecutor, deployManager) {
@@ -386,4 +388,4 @@ class RollbackSystem {
   }
 }
 
-module.exports = RollbackSystem;
+export default RollbackSystem;

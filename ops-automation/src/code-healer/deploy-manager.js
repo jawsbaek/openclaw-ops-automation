@@ -3,7 +3,9 @@
  * 패치 배포 및 카나리/블루-그린 전략 관리
  */
 
-const logger = require('../../lib/logger');
+import createLogger from "../../lib/logger.js";
+
+const logger = createLogger("deploy-manager");
 
 class DeployManager {
   constructor(sshExecutor, config) {
@@ -557,4 +559,4 @@ class DeployManager {
   }
 }
 
-module.exports = DeployManager;
+export default DeployManager;
