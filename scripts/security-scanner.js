@@ -5,9 +5,9 @@
  * Detects hardcoded secrets and command injection patterns
  */
 
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { execSync } from 'node:child_process';
 
 // Secret patterns to detect
 const SECRET_PATTERNS = [

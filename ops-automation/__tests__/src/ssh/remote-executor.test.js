@@ -2,7 +2,7 @@
  * Remote Executor Tests
  */
 
-import { jest, describe, test, expect, beforeEach, afterEach } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
 
 // Mock dependencies
 jest.unstable_mockModule('../../../src/ssh/connection-pool.js', () => ({
@@ -19,31 +19,33 @@ describe('RemoteExecutor', () => {
   let executor;
   let mockServersConfig;
   let mockWhitelistConfig;
-  let mockConnectionPool;
+  let _mockConnectionPool;
 
   beforeEach(() => {
     mockServersConfig = {
       servers: {
-        'web1': { host: '192.168.1.10', username: 'admin' },
-        'web2': { host: '192.168.1.11', username: 'admin' },
-        'db1': { host: '192.168.1.20', username: 'dbadmin' }
+        web1: { host: '192.168.1.10', username: 'admin' },
+        web2: { host: '192.168.1.11', username: 'admin' },
+        db1: { host: '192.168.1.20', username: 'dbadmin' }
       },
       groups: {
-        'webservers': ['web1', 'web2'],
-        'databases': ['db1']
+        webservers: ['web1', 'web2'],
+        databases: ['db1']
       }
     };
 
     mockWhitelistConfig = {
       allowedCommands: [
-        '/bin/ls', '/bin/cat', '/usr/bin/systemctl status',
+        '/bin/ls',
+        '/bin/cat',
+        '/usr/bin/systemctl status',
         { pattern: '^df -h.*', description: 'Check disk space' }
       ],
       blockedPatterns: ['rm -rf', 'dd if=', 'mkfs']
     };
 
     executor = new RemoteExecutor(mockServersConfig, mockWhitelistConfig);
-    mockConnectionPool = executor.connectionPool;
+    _mockConnectionPool = executor.connectionPool;
     jest.clearAllMocks();
   });
 
@@ -118,7 +120,7 @@ describe('RemoteExecutor', () => {
         user: 'admin',
         privateKey: 'mock-key'
       };
-      
+
       const config = executor.getServerConfig('web1');
       expect(config).toHaveProperty('host', 'web1');
       expect(config).toHaveProperty('port', 22);
@@ -130,7 +132,7 @@ describe('RemoteExecutor', () => {
   describe('simulateExecution()', () => {
     test('should return dry-run results', () => {
       const result = executor.simulateExecution('/bin/ls', ['web1', 'web2']);
-      
+
       expect(result.success).toBe(true);
       expect(result.dryRun).toBe(true);
       expect(result.results).toHaveLength(2);

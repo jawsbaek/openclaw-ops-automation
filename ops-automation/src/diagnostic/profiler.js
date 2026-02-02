@@ -280,6 +280,7 @@ class Profiler {
               command: parts.slice(10).join(' ')
             };
           }
+          return null;
         })
         .filter(Boolean);
     }
@@ -320,6 +321,7 @@ class Profiler {
               command: parts.slice(10).join(' ')
             };
           }
+          return null;
         })
         .filter(Boolean);
     }
@@ -346,6 +348,7 @@ class Profiler {
               mountPoint: parts[5]
             };
           }
+          return null;
         })
         .filter(Boolean);
     }

@@ -6,8 +6,6 @@
  */
 
 import fs from 'node:fs';
-import _path from 'node:path';
-import { execSync } from 'node:child_process';
 
 // Review criteria with weights
 const REVIEW_CRITERIA = {

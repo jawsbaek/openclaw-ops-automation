@@ -13,7 +13,7 @@ describe('LogCollector', () => {
     mockSSHExecutor = {
       execute: () => Promise.resolve({ success: true, results: [] })
     };
-    
+
     collector = new LogCollector(mockSSHExecutor);
   });
 
@@ -276,7 +276,7 @@ describe('LogCollector', () => {
   describe('getStatus', () => {
     test('should return recent collections', () => {
       const options = { targets: ['host1'], logPath: '/var/log/app.log' };
-      
+
       for (let i = 0; i < 15; i++) {
         collector.recordCollection(options, []);
       }

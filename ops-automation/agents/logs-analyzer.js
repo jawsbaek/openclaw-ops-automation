@@ -145,7 +145,9 @@ function generateReport(results) {
   report += `## Summary\n\n`;
 
   let totalFindings = 0;
-  results.forEach((r) => (totalFindings += r.findings.total));
+  results.forEach((r) => {
+    totalFindings += r.findings.total;
+  });
 
   report += `- **Total Issues Found:** ${totalFindings}\n`;
   report += `- **Log Files Analyzed:** ${results.length}\n\n`;

@@ -5,9 +5,8 @@
  * Handles conditional merging and notifications
  */
 
-import _fs from 'node:fs';
-import https from 'node:https';
 import http from 'node:http';
+import https from 'node:https';
 
 class AutoMerger {
   constructor(options = {}) {

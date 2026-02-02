@@ -16,7 +16,7 @@ class RollbackSystem {
    * 자동 롤백 실행
    */
   async rollback(deploymentId, reason, options = {}) {
-    const { force = false, partial = false } = options;
+    const { partial = false } = options;
 
     logger.warn(`롤백 시작: ${deploymentId}`);
     logger.warn(`사유: ${reason}`);
@@ -194,7 +194,7 @@ class RollbackSystem {
   async rollbackDatabase(_deployment, options = {}) {
     logger.warn('데이터베이스 롤백 시작 (위험!)');
 
-    const { dryRun = true, backupId } = options;
+    const { dryRun = true } = options;
 
     if (dryRun) {
       logger.info('[DRY-RUN] DB 롤백 시뮬레이션');
@@ -310,7 +310,9 @@ class RollbackSystem {
 
     for (const stage of deployment.stages) {
       const stageTargets = this.deployManager.getStageTargets(stage);
-      stageTargets.forEach((t) => targets.add(t));
+      stageTargets.forEach((t) => {
+        targets.add(t);
+      });
     }
 
     return Array.from(targets);

@@ -13,7 +13,7 @@ describe('Profiler', () => {
     mockSSHExecutor = {
       execute: () => Promise.resolve({ success: true, results: [{ stdout: '' }] })
     };
-    
+
     profiler = new Profiler(mockSSHExecutor);
   });
 
@@ -128,9 +128,9 @@ describe('Profiler', () => {
       expect(parsed).toHaveProperty('1min');
       expect(parsed).toHaveProperty('5min');
       expect(parsed).toHaveProperty('15min');
-      expect(parsed['1min']).toBe(2.50);
-      expect(parsed['5min']).toBe(1.80);
-      expect(parsed['15min']).toBe(1.20);
+      expect(parsed['1min']).toBe(2.5);
+      expect(parsed['5min']).toBe(1.8);
+      expect(parsed['15min']).toBe(1.2);
     });
 
     test('should return raw data for unparseable data', () => {
@@ -146,7 +146,7 @@ describe('Profiler', () => {
 Mem:          16000        8000        2000         200        5800       7000
 Swap:          4000         500        3500
       `.trim();
-      
+
       const parsed = profiler.parseMemoryData('free', output);
 
       expect(parsed).toHaveProperty('total');
@@ -161,7 +161,7 @@ Swap:          4000         500        3500
               total        used        free
 Mem:          16000        12000        4000
       `.trim();
-      
+
       const parsed = profiler.parseMemoryData('free', output);
 
       expect(parseFloat(parsed.usagePercent)).toBeCloseTo(75, 0);
@@ -175,7 +175,7 @@ Filesystem     1K-blocks      Used Available Use% Mounted on
 /dev/sda1      100000000  75000000  25000000  75% /
 /dev/sdb1       50000000  10000000  40000000  20% /data
       `.trim();
-      
+
       const parsed = profiler.parseDiskData('usage', output);
 
       expect(parsed).toBeInstanceOf(Array);
@@ -190,7 +190,7 @@ Filesystem     1K-blocks      Used Available Use% Mounted on
 Filesystem     1K-blocks      Used Available Use% Mounted on
 /dev/sda1      100000000  75000000  25000000  75% /
       `.trim();
-      
+
       const parsed = profiler.parseDiskData('usage', output);
 
       expect(parsed[0].usePercent).toBe('75%');
@@ -205,7 +205,7 @@ Inter-|   Receive                                                |  Transmit
   eth0: 1000000000 5000000    0    0    0     0          0         0 500000000 3000000
   eth1: 2000000000 8000000    0    0    0     0          0         0 800000000 4000000
       `.trim();
-      
+
       const parsed = profiler.parseNetworkData('interfaces', output);
 
       // parseNetworkData returns raw output for 'interfaces' type
@@ -218,9 +218,7 @@ Inter-|   Receive                                                |  Transmit
   describe.skip('generateRecommendations', () => {
     // TODO: Implement generateRecommendations method in Profiler
     test('should recommend CPU optimization for high CPU usage', () => {
-      const bottlenecks = [
-        { type: 'cpu', severity: 'high', value: 85 }
-      ];
+      const bottlenecks = [{ type: 'cpu', severity: 'high', value: 85 }];
 
       const recommendations = profiler.generateRecommendations(bottlenecks);
 
@@ -230,9 +228,7 @@ Inter-|   Receive                                                |  Transmit
     });
 
     test('should recommend memory optimization for high memory usage', () => {
-      const bottlenecks = [
-        { type: 'memory', severity: 'high', value: 88 }
-      ];
+      const bottlenecks = [{ type: 'memory', severity: 'high', value: 88 }];
 
       const recommendations = profiler.generateRecommendations(bottlenecks);
 

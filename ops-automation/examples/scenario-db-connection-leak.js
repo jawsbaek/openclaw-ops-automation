@@ -77,7 +77,9 @@ async function dbConnectionLeakScenario() {
   ];
 
   console.log('발견된 증거:');
-  evidence.forEach((e) => console.log('  -', e));
+  evidence.forEach((e) => {
+    console.log('  -', e);
+  });
 
   // 5. 자동 패치 생성
   console.log('\n5. 자동 패치 생성...');

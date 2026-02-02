@@ -2,7 +2,7 @@
  * SSH Connection Pool Tests
  */
 
-import { jest, describe, test, expect, beforeEach, afterEach } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
 
 // Mock ssh2
 const mockClient = {
@@ -116,7 +116,7 @@ describe('SSHConnectionPool', () => {
     test('should close all connections', () => {
       const mockEnd1 = jest.fn();
       const mockEnd2 = jest.fn();
-      
+
       pool.connections.set('server1', { client: { end: mockEnd1 } });
       pool.connections.set('server2', { client: { end: mockEnd2 } });
       pool.stats.activeConnections = 2;
