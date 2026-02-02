@@ -5,9 +5,9 @@
  * Analyzes code changes and provides intelligent feedback
  */
 
-const fs = require('node:fs');
-const _path = require('node:path');
-const { execSync } = require('node:child_process');
+import fs from 'node:fs';
+import _path from 'node:path';
+import { execSync } from 'node:child_process';
 
 // Review criteria with weights
 const REVIEW_CRITERIA = {
@@ -416,7 +416,7 @@ class PRReviewer {
 }
 
 // CLI execution
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   const options = {};
 
@@ -439,4 +439,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = PRReviewer;
+export default PRReviewer;

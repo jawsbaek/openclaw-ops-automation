@@ -5,9 +5,9 @@
  * Handles conditional merging and notifications
  */
 
-const _fs = require('node:fs');
-const https = require('node:https');
-const http = require('node:http');
+import _fs from 'node:fs';
+import https from 'node:https';
+import http from 'node:http';
 
 class AutoMerger {
   constructor(options = {}) {
@@ -234,7 +234,7 @@ class AutoMerger {
 }
 
 // CLI execution
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   const options = {};
   let action = 'check';
@@ -290,4 +290,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = AutoMerger;
+export default AutoMerger;

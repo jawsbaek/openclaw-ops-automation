@@ -5,9 +5,9 @@
  * Detects hardcoded secrets and command injection patterns
  */
 
-const fs = require('node:fs');
-const path = require('node:path');
-const { execSync } = require('node:child_process');
+import fs from 'node:fs';
+import path from 'node:path';
+import { execSync } from 'node:child_process';
 
 // Secret patterns to detect
 const SECRET_PATTERNS = [
@@ -369,7 +369,7 @@ class SecurityScanner {
 }
 
 // CLI execution
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const scanType = process.argv[2] || 'all';
 
   const scanner = new SecurityScanner(scanType);
@@ -385,4 +385,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = SecurityScanner;
+export default SecurityScanner;
