@@ -5,9 +5,9 @@
  * Handles conditional merging and notifications
  */
 
-const fs = require('fs');
-const https = require('https');
-const http = require('http');
+const _fs = require('node:fs');
+const https = require('node:https');
+const http = require('node:http');
 
 class AutoMerger {
   constructor(options = {}) {
@@ -23,15 +23,11 @@ class AutoMerger {
 
   async check() {
     console.log(`🔍 Running pre-merge checks for PR #${this.prNumber}...`);
-    
-    const checks = [
-      this.checkConflicts(),
-      this.checkBranchProtection(),
-      this.checkMergeability()
-    ];
+
+    const checks = [this.checkConflicts(), this.checkBranchProtection(), this.checkMergeability()];
 
     const results = await Promise.all(checks);
-    const allPassed = results.every(r => r);
+    const allPassed = results.every((r) => r);
 
     if (allPassed) {
       console.log('✅ All pre-merge checks passed');
@@ -196,7 +192,7 @@ class AutoMerger {
     return new Promise((resolve, reject) => {
       const data = JSON.stringify(payload);
       const parsedUrl = new URL(url);
-      
+
       const options = {
         hostname: parsedUrl.hostname,
         port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
@@ -209,7 +205,7 @@ class AutoMerger {
       };
 
       const client = parsedUrl.protocol === 'https:' ? https : http;
-      
+
       const req = client.request(options, (res) => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           resolve();
@@ -226,13 +222,13 @@ class AutoMerger {
 
   async createRevertPR() {
     console.log(`🔄 Creating revert PR for PR #${this.prNumber}...`);
-    
+
     // In real implementation, would:
     // 1. Create a new branch
     // 2. Revert the merge commit
     // 3. Push the branch
     // 4. Create a new PR
-    
+
     console.log('   ✅ Revert PR created (simulated)');
   }
 }
@@ -243,11 +239,11 @@ if (require.main === module) {
   const options = {};
   let action = 'check';
 
-  args.forEach(arg => {
+  args.forEach((arg) => {
     if (arg.startsWith('--')) {
       const [key, value] = arg.substring(2).split('=');
       const cleanKey = key.replace(/-/g, '_');
-      
+
       if (cleanKey === 'check' || cleanKey === 'notify' || cleanKey === 'revert') {
         action = cleanKey;
       } else {
@@ -282,13 +278,13 @@ if (require.main === module) {
   }
 
   promise
-    .then(result => {
+    .then((result) => {
       if (result === false) {
         process.exit(1);
       }
       process.exit(0);
     })
-    .catch(error => {
+    .catch((error) => {
       console.error('❌ Auto-merger failed:', error);
       process.exit(1);
     });

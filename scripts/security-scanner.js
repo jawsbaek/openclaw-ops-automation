@@ -5,20 +5,20 @@
  * Detects hardcoded secrets and command injection patterns
  */
 
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const { execSync } = require('node:child_process');
 
 // Secret patterns to detect
 const SECRET_PATTERNS = [
   {
     name: 'API Key',
-    pattern: /(?:api[_-]?key|apikey)\s*[:=]\s*["']([a-zA-Z0-9_\-]{20,})["']/gi,
+    pattern: /(?:api[_-]?key|apikey)\s*[:=]\s*["']([a-zA-Z0-9_-]{20,})["']/gi,
     severity: 'high'
   },
   {
     name: 'Secret Key',
-    pattern: /(?:secret[_-]?key|secretkey)\s*[:=]\s*["']([a-zA-Z0-9_\-]{20,})["']/gi,
+    pattern: /(?:secret[_-]?key|secretkey)\s*[:=]\s*["']([a-zA-Z0-9_-]{20,})["']/gi,
     severity: 'high'
   },
   {
@@ -38,7 +38,7 @@ const SECRET_PATTERNS = [
   },
   {
     name: 'AWS Secret Key',
-    pattern: /(?:aws[_-]?secret[_-]?access[_-]?key|aws[_-]?secret)\s*[:=]\s*["']([a-zA-Z0-9\/+=]{40})["']/gi,
+    pattern: /(?:aws[_-]?secret[_-]?access[_-]?key|aws[_-]?secret)\s*[:=]\s*["']([a-zA-Z0-9/+=]{40})["']/gi,
     severity: 'critical'
   },
   {
@@ -63,7 +63,7 @@ const SECRET_PATTERNS = [
   },
   {
     name: 'Database URL',
-    pattern: /(?:postgres|mysql|mongodb):\/\/[^:]+:[^@]+@[^\/]+/gi,
+    pattern: /(?:postgres|mysql|mongodb):\/\/[^:]+:[^@]+@[^/]+/gi,
     severity: 'high'
   }
 ];
@@ -125,7 +125,7 @@ class SecurityScanner {
     console.log(`🔒 Starting security scan (${this.scanType})...`);
 
     const files = this.getChangedFiles();
-    
+
     if (files.length === 0) {
       console.log('✅ No files to scan');
       return true;
@@ -135,7 +135,7 @@ class SecurityScanner {
 
     for (const file of files) {
       if (this.shouldSkipFile(file)) continue;
-      
+
       this.fileCount++;
       await this.scanFile(file);
     }
@@ -150,9 +150,12 @@ class SecurityScanner {
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'ignore']
       });
-      
-      return output.trim().split('\n').filter(f => f);
-    } catch (error) {
+
+      return output
+        .trim()
+        .split('\n')
+        .filter((f) => f);
+    } catch (_error) {
       // Fallback: scan all .js, .ts, .jsx, .tsx files
       console.log('⚠️ Could not get changed files, scanning all JS/TS files');
       return this.getAllSourceFiles();
@@ -162,11 +165,11 @@ class SecurityScanner {
   getAllSourceFiles() {
     const walk = (dir, fileList = []) => {
       const files = fs.readdirSync(dir);
-      
-      files.forEach(file => {
+
+      files.forEach((file) => {
         const filePath = path.join(dir, file);
         const stat = fs.statSync(filePath);
-        
+
         if (stat.isDirectory()) {
           if (!this.shouldSkipDirectory(file)) {
             walk(filePath, fileList);
@@ -175,7 +178,7 @@ class SecurityScanner {
           fileList.push(filePath);
         }
       });
-      
+
       return fileList;
     };
 
@@ -198,8 +201,8 @@ class SecurityScanner {
       /build\//,
       /coverage\//
     ];
-    
-    return skipPatterns.some(pattern => pattern.test(file));
+
+    return skipPatterns.some((pattern) => pattern.test(file));
   }
 
   isSourceFile(file) {
@@ -221,7 +224,6 @@ class SecurityScanner {
       if (this.scanType === 'all' || this.scanType === 'injection') {
         this.scanForInjection(file, content);
       }
-
     } catch (error) {
       console.error(`⚠️ Error scanning ${file}: ${error.message}`);
     }
@@ -230,12 +232,12 @@ class SecurityScanner {
   scanForSecrets(file, content) {
     SECRET_PATTERNS.forEach(({ name, pattern, severity }) => {
       const matches = content.matchAll(new RegExp(pattern.source, pattern.flags));
-      
+
       for (const match of matches) {
         // Check if it's in a comment or example
         const lineStart = content.lastIndexOf('\n', match.index);
         const line = content.substring(lineStart, content.indexOf('\n', match.index));
-        
+
         // Skip if in comment or obvious example
         if (this.isLikelyFalsePositive(line, match[0])) {
           continue;
@@ -257,7 +259,7 @@ class SecurityScanner {
   scanForInjection(file, content) {
     INJECTION_PATTERNS.forEach(({ name, pattern, severity, message }) => {
       const matches = content.matchAll(new RegExp(pattern.source, pattern.flags));
-      
+
       for (const match of matches) {
         this.findings.push({
           type: 'injection',
@@ -281,7 +283,7 @@ class SecurityScanner {
     // Check if it's an example or placeholder
     const lowerMatch = match.toLowerCase();
     const placeholders = ['example', 'placeholder', 'your-', 'xxx', 'test', 'demo'];
-    if (placeholders.some(p => lowerMatch.includes(p))) {
+    if (placeholders.some((p) => lowerMatch.includes(p))) {
       return true;
     }
 
@@ -302,7 +304,7 @@ class SecurityScanner {
     const lineNum = this.getLineNumber(content, index);
     const start = Math.max(0, lineNum - contextLines - 1);
     const end = Math.min(lines.length, lineNum + contextLines);
-    
+
     return lines.slice(start, end).join('\n');
   }
 
@@ -324,7 +326,7 @@ class SecurityScanner {
       low: []
     };
 
-    this.findings.forEach(finding => {
+    this.findings.forEach((finding) => {
       const severity = finding.severity || 'medium';
       if (bySeverity[severity]) {
         bySeverity[severity].push(finding);
@@ -332,10 +334,10 @@ class SecurityScanner {
     });
 
     // Report critical and high severity issues
-    ['critical', 'high'].forEach(severity => {
+    ['critical', 'high'].forEach((severity) => {
       if (bySeverity[severity].length > 0) {
         console.log(`\n🚨 ${severity.toUpperCase()} Severity (${bySeverity[severity].length})`);
-        bySeverity[severity].forEach(finding => {
+        bySeverity[severity].forEach((finding) => {
           console.log(`   ${finding.file}:${finding.line}`);
           console.log(`   ${finding.name}: ${finding.message}`);
           console.log('');
@@ -344,10 +346,10 @@ class SecurityScanner {
     });
 
     // Report medium and low severity issues
-    ['medium', 'low'].forEach(severity => {
+    ['medium', 'low'].forEach((severity) => {
       if (bySeverity[severity].length > 0) {
         console.log(`\n⚠️  ${severity.toUpperCase()} Severity (${bySeverity[severity].length})`);
-        bySeverity[severity].forEach(finding => {
+        bySeverity[severity].forEach((finding) => {
           console.log(`   ${finding.file}:${finding.line} - ${finding.name}`);
         });
       }
@@ -355,7 +357,7 @@ class SecurityScanner {
 
     // Fail if critical or high severity issues found
     const criticalCount = bySeverity.critical.length + bySeverity.high.length;
-    
+
     if (criticalCount > 0) {
       console.log(`\n❌ Security scan FAILED: ${criticalCount} critical/high severity issues found`);
       return false;
@@ -369,14 +371,15 @@ class SecurityScanner {
 // CLI execution
 if (require.main === module) {
   const scanType = process.argv[2] || 'all';
-  
+
   const scanner = new SecurityScanner(scanType);
-  
-  scanner.scan()
-    .then(passed => {
+
+  scanner
+    .scan()
+    .then((passed) => {
       process.exit(passed ? 0 : 1);
     })
-    .catch(error => {
+    .catch((error) => {
       console.error('❌ Security scan failed:', error);
       process.exit(1);
     });

@@ -1,6 +1,6 @@
 /**
  * 시나리오 2: 데이터베이스 커넥션 고갈 자동 해결
- * 
+ *
  * 워크플로우:
  * 1. API 지연 알람
  * 2. SSH로 DB 서버 접속, 커넥션 현황 조회
@@ -33,11 +33,11 @@ async function dbConnectionLeakScenario() {
     value: 5000, // 5초
     threshold: 500
   };
-  console.log('응답 시간:', alert.value + 'ms (임계값: ' + alert.threshold + 'ms)');
+  console.log('응답 시간:', `${alert.value}ms (임계값: ${alert.threshold}ms)`);
 
   // 2. DB 커넥션 상태 확인
   console.log('\n2. DB 커넥션 상태 확인...');
-  
+
   const dbCheckResult = await sshExecutor.execute({
     target: 'db-master.example.com',
     command: 'psql -c "SELECT count(*) FROM pg_stat_activity;"'
@@ -47,7 +47,7 @@ async function dbConnectionLeakScenario() {
 
   // 3. 애플리케이션 로그 분석
   console.log('\n3. 애플리케이션 로그 분석...');
-  
+
   const errors = await logCollector.collectErrors(
     ['web1.example.com', 'web2.example.com'],
     '/var/log/app/app.log',
@@ -55,10 +55,9 @@ async function dbConnectionLeakScenario() {
   );
 
   console.log('에러 수:', errors.errorCount);
-  
-  const connectionErrors = errors.errors.filter(e => 
-    e.message.toLowerCase().includes('connection') ||
-    e.message.toLowerCase().includes('pool')
+
+  const connectionErrors = errors.errors.filter(
+    (e) => e.message.toLowerCase().includes('connection') || e.message.toLowerCase().includes('pool')
   );
 
   console.log('커넥션 관련 에러:', connectionErrors.length);
@@ -78,13 +77,13 @@ async function dbConnectionLeakScenario() {
   ];
 
   console.log('발견된 증거:');
-  evidence.forEach(e => console.log('  -', e));
+  evidence.forEach((e) => console.log('  -', e));
 
   // 5. 자동 패치 생성
   console.log('\n5. 자동 패치 생성...');
-  
+
   const patchGenerator = new PatchGenerator();
-  
+
   const patch = await patchGenerator.generatePatch({
     type: 'connection_leak',
     component: 'database_pool',
@@ -98,10 +97,10 @@ async function dbConnectionLeakScenario() {
 
   // 패치 내용 표시
   console.log('\n생성된 패치:');
-  patch.changes.forEach(change => {
+  patch.changes.forEach((change) => {
     console.log(`\n파일: ${change.file}`);
     console.log('변경 사항:');
-    change.changes.forEach(c => {
+    change.changes.forEach((c) => {
       console.log(`  라인 ${c.line}: ${c.type}`);
       console.log('  원본:', c.original);
       console.log('  수정:', c.modified);
@@ -110,9 +109,9 @@ async function dbConnectionLeakScenario() {
 
   // 6. Dry-run 배포 테스트
   console.log('\n6. Dry-run 배포 테스트...');
-  
+
   const deployManager = new DeployManager(sshExecutor);
-  
+
   const dryRunResult = await deployManager.deployHotfix({
     patch,
     repository: {
@@ -129,9 +128,9 @@ async function dbConnectionLeakScenario() {
 
   // 7. 승인 요청 (실제 배포는 승인 필요)
   console.log('\n7. 실제 배포 승인 대기...');
-  
+
   const approvalRequired = true;
-  
+
   if (approvalRequired) {
     console.log('⚠️  프로덕션 배포는 수동 승인이 필요합니다.');
     console.log('승인 후 다음 명령 실행:');
@@ -139,7 +138,7 @@ async function dbConnectionLeakScenario() {
   } else {
     // 자동 배포 (테스트 환경만)
     console.log('\n8. 테스트 환경 자동 배포...');
-    
+
     const deployment = await deployManager.deployHotfix({
       patch,
       repository: {
@@ -156,9 +155,9 @@ async function dbConnectionLeakScenario() {
 
   // 8. 배포 후 검증 (가정)
   console.log('\n9. 배포 후 검증 (시뮬레이션)...');
-  
+
   // 1분 후 커넥션 수 재확인
-  await new Promise(resolve => setTimeout(resolve, 5000)); // 5초 대기 (시뮬레이션)
+  await new Promise((resolve) => setTimeout(resolve, 5000)); // 5초 대기 (시뮬레이션)
 
   const postDeployCheck = {
     before: {
@@ -173,11 +172,11 @@ async function dbConnectionLeakScenario() {
 
   console.log('배포 전:');
   console.log('  활성 커넥션:', postDeployCheck.before.activeConnections);
-  console.log('  응답 시간:', postDeployCheck.before.responseTime + 'ms');
+  console.log('  응답 시간:', `${postDeployCheck.before.responseTime}ms`);
 
   console.log('배포 후:');
   console.log('  활성 커넥션:', postDeployCheck.after.activeConnections);
-  console.log('  응답 시간:', postDeployCheck.after.responseTime + 'ms');
+  console.log('  응답 시간:', `${postDeployCheck.after.responseTime}ms`);
 
   const improvement = {
     connections: postDeployCheck.before.activeConnections - postDeployCheck.after.activeConnections,
@@ -186,7 +185,7 @@ async function dbConnectionLeakScenario() {
 
   console.log('\n개선도:');
   console.log('  커넥션 감소:', improvement.connections);
-  console.log('  응답 시간 개선:', improvement.responseTime + 'ms');
+  console.log('  응답 시간 개선:', `${improvement.responseTime}ms`);
 
   if (improvement.connections > 0 && improvement.responseTime > 0) {
     console.log('\n🎉 커넥션 누수 해결 성공!');
@@ -210,7 +209,7 @@ async function dbConnectionLeakScenario() {
 if (require.main === module) {
   dbConnectionLeakScenario()
     .then(() => process.exit(0))
-    .catch(err => {
+    .catch((err) => {
       console.error('시나리오 실행 오류:', err);
       process.exit(1);
     });

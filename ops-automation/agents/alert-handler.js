@@ -3,9 +3,9 @@
  * @module agents/alert-handler
  */
 
-import { createLogger } from '../lib/logger.js';
 import { loadAlertThresholds } from '../lib/config-loader.js';
 import { getLatestMetrics } from '../lib/file-utils.js';
+import { createLogger } from '../lib/logger.js';
 
 const logger = createLogger('alert-handler');
 
@@ -42,7 +42,7 @@ function evaluateThreshold(metricName, value, threshold) {
       message: `${metricName} is critical: ${value} >= ${threshold.critical}`
     };
   }
-  
+
   if (value >= threshold.warning) {
     return {
       metric: metricName,
@@ -64,14 +64,14 @@ function evaluateThreshold(metricName, value, threshold) {
 function isDuplicate(alert) {
   const key = `${alert.metric}-${alert.level}`;
   const now = Date.now();
-  
+
   if (alertCache.has(key)) {
     const lastAlertTime = alertCache.get(key);
     if (now - lastAlertTime < DEDUP_WINDOW_MS) {
       return true;
     }
   }
-  
+
   alertCache.set(key, now);
   return false;
 }
@@ -98,7 +98,7 @@ function shouldTriggerAutoHeal(alert) {
   if (alert.level === PRIORITY.CRITICAL || alert.level === PRIORITY.HIGH) {
     // Check if metric is autoHeal-eligible
     const autoHealMetrics = ['disk_usage', 'memory_usage', 'process_down'];
-    return autoHealMetrics.some(m => alert.metric.includes(m));
+    return autoHealMetrics.some((m) => alert.metric.includes(m));
   }
   return false;
 }
@@ -135,11 +135,7 @@ export async function processAlerts() {
   // Check Disk
   if (metrics.system?.disk) {
     for (const disk of metrics.system.disk) {
-      const alert = evaluateThreshold(
-        `disk_usage_${disk.mount}`,
-        disk.percentage,
-        thresholds.disk_usage
-      );
+      const alert = evaluateThreshold(`disk_usage_${disk.mount}`, disk.percentage, thresholds.disk_usage);
       if (alert) {
         alert.metadata = { device: disk.device, mount: disk.mount };
         alerts.push(alert);
@@ -172,8 +168,8 @@ export async function processAlerts() {
   }
 
   // Filter duplicates
-  const uniqueAlerts = alerts.filter(alert => !isDuplicate(alert));
-  
+  const uniqueAlerts = alerts.filter((alert) => !isDuplicate(alert));
+
   // Clean up old cache entries
   cleanupCache();
 
@@ -188,8 +184,8 @@ export async function processAlerts() {
   logger.info('Alert processing complete', {
     totalAlerts: alerts.length,
     uniqueAlerts: uniqueAlerts.length,
-    criticalAlerts: processedAlerts.filter(a => a.level === PRIORITY.CRITICAL).length,
-    autoHealTriggers: processedAlerts.filter(a => a.shouldAutoHeal).length
+    criticalAlerts: processedAlerts.filter((a) => a.level === PRIORITY.CRITICAL).length,
+    autoHealTriggers: processedAlerts.filter((a) => a.shouldAutoHeal).length
   });
 
   return processedAlerts;
@@ -231,7 +227,7 @@ export async function handleAlert(alert) {
     logger.info('Triggering AutoHeal for alert', { alertId: alert.id });
     result.actions.push('autoheal_triggered');
     result.autoHealRequested = true;
-    
+
     // In real implementation, this would spawn AutoHeal agent
     // openclaw agents spawn autoheal --task "Handle alert: ${alert.id}"
   }
@@ -266,11 +262,11 @@ export async function run() {
  */
 if (import.meta.url === `file://${process.argv[1]}`) {
   run()
-    .then(result => {
+    .then((result) => {
       logger.info('Alert handler completed', result);
       process.exit(0);
     })
-    .catch(error => {
+    .catch((error) => {
       logger.error('Alert handler failed', { error: error.message, stack: error.stack });
       process.exit(1);
     });

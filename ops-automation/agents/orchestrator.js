@@ -4,10 +4,9 @@
  */
 
 import { createLogger } from '../lib/logger.js';
-import collectMetrics from './metrics-collector.js';
-import analyzeLogs from './logs-analyzer.js';
 import { run as runAlertHandler } from './alert-handler.js';
-import heal from './autoheal.js';
+import analyzeLogs from './logs-analyzer.js';
+import collectMetrics from './metrics-collector.js';
 import generateReport from './reporter.js';
 
 const logger = createLogger('orchestrator');
@@ -27,12 +26,12 @@ const schedulerState = {
  * Configuration for agent scheduling
  */
 const SCHEDULE_CONFIG = {
-  metricsInterval: 5 * 60 * 1000,      // 5 minutes
-  logsInterval: 10 * 60 * 1000,         // 10 minutes
-  alertInterval: 2 * 60 * 1000,         // 2 minutes
-  dailyReportHour: 9,                   // 9 AM
-  weeklyReportDay: 1,                   // Monday
-  weeklyReportHour: 10                  // 10 AM
+  metricsInterval: 5 * 60 * 1000, // 5 minutes
+  logsInterval: 10 * 60 * 1000, // 10 minutes
+  alertInterval: 2 * 60 * 1000, // 2 minutes
+  dailyReportHour: 9, // 9 AM
+  weeklyReportDay: 1, // Monday
+  weeklyReportHour: 10 // 10 AM
 };
 
 /**
@@ -44,7 +43,7 @@ const SCHEDULE_CONFIG = {
 function isTimeToRun(taskName, interval) {
   const now = Date.now();
   const lastRun = schedulerState[`last${taskName}`] || 0;
-  return (now - lastRun) >= interval;
+  return now - lastRun >= interval;
 }
 
 /**
@@ -63,14 +62,14 @@ function shouldGenerateDailyReport() {
   const now = new Date();
   const currentHour = now.getHours();
   const lastReportDate = new Date(schedulerState.lastDailyReport);
-  
+
   // Check if it's the right hour and hasn't been run today
   if (currentHour === SCHEDULE_CONFIG.dailyReportHour) {
     if (now.toDateString() !== lastReportDate.toDateString()) {
       return true;
     }
   }
-  
+
   return false;
 }
 
@@ -83,16 +82,15 @@ function shouldGenerateWeeklyReport() {
   const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
   const currentHour = now.getHours();
   const lastReportDate = new Date(schedulerState.lastDailyReport);
-  
-  if (currentDay === SCHEDULE_CONFIG.weeklyReportDay && 
-      currentHour === SCHEDULE_CONFIG.weeklyReportHour) {
+
+  if (currentDay === SCHEDULE_CONFIG.weeklyReportDay && currentHour === SCHEDULE_CONFIG.weeklyReportHour) {
     // Check if not already run this week
     const daysSinceLastReport = (now - lastReportDate) / (1000 * 60 * 60 * 24);
     if (daysSinceLastReport >= 6) {
       return true;
     }
   }
-  
+
   return false;
 }
 
@@ -102,11 +100,11 @@ function shouldGenerateWeeklyReport() {
  */
 async function runMetricsCollection() {
   logger.info('Running metrics collection');
-  
+
   try {
     const metrics = await collectMetrics();
     markTaskRun('MetricsCollection');
-    
+
     return {
       task: 'metrics-collection',
       success: true,
@@ -133,14 +131,14 @@ async function runMetricsCollection() {
  */
 async function runLogAnalysis() {
   logger.info('Running log analysis');
-  
+
   try {
     const result = await analyzeLogs();
     markTaskRun('LogAnalysis');
-    
+
     const totalIssues = result.results.reduce((sum, r) => sum + r.findings.total, 0);
     const totalAnomalies = result.results.reduce((sum, r) => sum + r.anomalies.length, 0);
-    
+
     return {
       task: 'log-analysis',
       success: true,
@@ -168,11 +166,11 @@ async function runLogAnalysis() {
  */
 async function runAlertChecking() {
   logger.info('Running alert checking');
-  
+
   try {
     const result = await runAlertHandler();
     markTaskRun('AlertCheck');
-    
+
     return {
       task: 'alert-check',
       success: true,
@@ -198,9 +196,9 @@ async function runAlertChecking() {
  */
 async function runReportGeneration() {
   logger.info('Checking for scheduled reports');
-  
+
   const results = [];
-  
+
   if (shouldGenerateDailyReport()) {
     logger.info('Generating daily report');
     try {
@@ -220,7 +218,7 @@ async function runReportGeneration() {
       });
     }
   }
-  
+
   if (shouldGenerateWeeklyReport()) {
     logger.info('Generating weekly report');
     try {
@@ -239,7 +237,7 @@ async function runReportGeneration() {
       });
     }
   }
-  
+
   return {
     task: 'report-generation',
     success: true,
@@ -253,7 +251,7 @@ async function runReportGeneration() {
  */
 export async function heartbeat() {
   schedulerState.runCount++;
-  
+
   logger.info('Orchestrator heartbeat', {
     runCount: schedulerState.runCount,
     uptime: process.uptime()
@@ -286,9 +284,9 @@ export async function heartbeat() {
     timestamp: new Date().toISOString(),
     runCount: schedulerState.runCount,
     tasksExecuted: results.length,
-    successful: results.filter(r => r.status === 'fulfilled' && r.value.success).length,
-    failed: results.filter(r => r.status === 'rejected' || !r.value?.success).length,
-    results: results.map(r => r.status === 'fulfilled' ? r.value : { error: r.reason })
+    successful: results.filter((r) => r.status === 'fulfilled' && r.value.success).length,
+    failed: results.filter((r) => r.status === 'rejected' || !r.value?.success).length,
+    results: results.map((r) => (r.status === 'fulfilled' ? r.value : { error: r.reason }))
   };
 
   logger.info('Heartbeat completed', summary);
@@ -326,18 +324,18 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
   if (mode === 'continuous') {
     start(60000) // 1 minute heartbeat
-      .catch(error => {
+      .catch((error) => {
         logger.error('Orchestrator failed to start', { error: error.message });
         process.exit(1);
       });
   } else {
     // Run once
     heartbeat()
-      .then(result => {
+      .then((result) => {
         logger.info('Orchestrator run completed', result);
         process.exit(0);
       })
-      .catch(error => {
+      .catch((error) => {
         logger.error('Orchestrator run failed', { error: error.message, stack: error.stack });
         process.exit(1);
       });

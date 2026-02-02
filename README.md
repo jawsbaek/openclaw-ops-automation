@@ -43,7 +43,7 @@ openclaw agents spawn ops-orchestrator
 PR 자동 리뷰 및 머지 시스템에 대한 자세한 내용은 [`docs/pr-automation-guide.md`](docs/pr-automation-guide.md)를 참조하세요.
 
 **주요 기능:**
-- ✅ **코드 품질 검사**: ESLint, 테스트, 커버리지 (80% 이상)
+- ✅ **코드 품질 검사**: Biome 린팅 & 포맷팅, 테스트, 커버리지 (80% 이상)
 - 🔒 **보안 스캔**: npm audit, 시크릿 스캔, 인젝션 패턴 검사
 - 🤖 **AI 리뷰**: GPT-4 기반 코드 분석 (8/10 점 이상 자동 승인)
 - 🔀 **자동 머지**: 조건부 자동 머지 (squash/merge/rebase)

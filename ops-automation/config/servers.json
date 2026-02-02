@@ -1,27 +1,10 @@
 {
   "groups": {
-    "web": [
-      "web1.example.com",
-      "web2.example.com",
-      "web3.example.com"
-    ],
-    "db": [
-      "db-master.example.com",
-      "db-replica.example.com"
-    ],
-    "cache": [
-      "redis1.example.com",
-      "redis2.example.com"
-    ],
-    "queue": [
-      "rabbitmq1.example.com"
-    ],
-    "production": [
-      "web1.example.com",
-      "web2.example.com",
-      "db-master.example.com",
-      "redis1.example.com"
-    ]
+    "web": ["web1.example.com", "web2.example.com", "web3.example.com"],
+    "db": ["db-master.example.com", "db-replica.example.com"],
+    "cache": ["redis1.example.com", "redis2.example.com"],
+    "queue": ["rabbitmq1.example.com"],
+    "production": ["web1.example.com", "web2.example.com", "db-master.example.com", "redis1.example.com"]
   },
   "ssh": {
     "user": "ops-bot",

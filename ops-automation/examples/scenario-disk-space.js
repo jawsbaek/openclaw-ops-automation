@@ -1,6 +1,6 @@
 /**
  * 시나리오 3: 디스크 파티션 확장 및 정리
- * 
+ *
  * 워크플로우:
  * 1. 디스크 90% 알람
  * 2. SSH로 파일시스템 분석
@@ -35,17 +35,17 @@ async function diskSpaceScenario() {
 
   // 2. 디스크 프로파일링
   console.log('\n2. 디스크 상태 분석...');
-  
+
   const profile = await profiler.profileDisk('web1.example.com');
-  
+
   console.log('파티션 사용 현황:');
-  profile.usage.forEach(disk => {
+  profile.usage.forEach((disk) => {
     console.log(`  ${disk.mountPoint}: ${disk.usePercent} (${disk.used}/${disk.size})`);
   });
 
   // 3. 큰 파일/디렉토리 찾기
   console.log('\n3. 디스크 공간을 많이 차지하는 항목 찾기...');
-  
+
   const largeItemsResult = await sshExecutor.execute({
     target: 'web1.example.com',
     command: 'du -sh /var/log/* 2>/dev/null | sort -hr | head -10'
@@ -58,7 +58,7 @@ async function diskSpaceScenario() {
 
   // 4. 오래된 로그 파일 확인
   console.log('\n4. 오래된 로그 파일 확인...');
-  
+
   const oldLogsResult = await sshExecutor.execute({
     target: 'web1.example.com',
     command: 'find /var/log -type f -mtime +30 -size +100M -exec ls -lh {} \\; 2>/dev/null | head -10'
@@ -66,7 +66,7 @@ async function diskSpaceScenario() {
 
   console.log('30일 이상 된 100MB 이상 파일:');
   if (oldLogsResult.success) {
-    const oldLogs = oldLogsResult.results[0].stdout.split('\n').filter(l => l.trim());
+    const oldLogs = oldLogsResult.results[0].stdout.split('\n').filter((l) => l.trim());
     console.log(`발견: ${oldLogs.length}개`);
   }
 
@@ -101,7 +101,7 @@ async function diskSpaceScenario() {
   ];
 
   console.log('사용 가능한 전략:');
-  strategies.forEach(s => {
+  strategies.forEach((s) => {
     console.log(`  ${s.priority}. ${s.name}: ${s.description} (승인: ${s.requireApproval ? '필요' : '불필요'})`);
   });
 
@@ -144,7 +144,7 @@ async function diskSpaceScenario() {
   // 7. 전략 2: 오래된 로그 아카이빙
   console.log('\n7. 전략 2 실행: 로그 아카이빙 (시뮬레이션)...');
 
-  const archiveScript = `
+  const _archiveScript = `
 #!/bin/bash
 ARCHIVE_DATE=$(date +%Y%m%d)
 ARCHIVE_DIR="/tmp/log-archive-$ARCHIVE_DATE"
@@ -192,13 +192,11 @@ echo "Archived logs to S3: $S3_BUCKET"
   const postProfile = await profiler.profileDisk('web1.example.com');
 
   const beforeUsage = 92;
-  const afterUsage = parseInt(
-    postProfile.usage.find(d => d.mountPoint === '/var/log')?.usePercent || '85'
-  );
+  const afterUsage = parseInt(postProfile.usage.find((d) => d.mountPoint === '/var/log')?.usePercent || '85', 10);
 
-  console.log('작업 전:', beforeUsage + '%');
-  console.log('작업 후:', afterUsage + '%');
-  console.log('확보된 공간:', beforeUsage - afterUsage + '%');
+  console.log('작업 전:', `${beforeUsage}%`);
+  console.log('작업 후:', `${afterUsage}%`);
+  console.log('확보된 공간:', `${beforeUsage - afterUsage}%`);
 
   if (afterUsage < 85) {
     console.log('\n✅ 디스크 공간 정리 성공!');
@@ -212,15 +210,15 @@ echo "Archived logs to S3: $S3_BUCKET"
   const cronJob = '0 2 * * * /usr/local/bin/archive-logs.sh >> /var/log/archive.log 2>&1';
 
   console.log('[시뮬레이션] Cron 작업 추가:');
-  console.log('  ' + cronJob);
+  console.log(`  ${cronJob}`);
   console.log('  → 매일 새벽 2시 로그 아카이빙 실행');
 
   // 11. 모니터링 알람 임계값 조정
   console.log('\n11. 모니터링 알람 임계값 조정...');
 
   const newThreshold = {
-    warning: 80,  // 이전: 85
-    critical: 90  // 이전: 95
+    warning: 80, // 이전: 85
+    critical: 90 // 이전: 95
   };
 
   console.log('새 임계값:', newThreshold);
@@ -240,7 +238,7 @@ echo "Archived logs to S3: $S3_BUCKET"
 if (require.main === module) {
   diskSpaceScenario()
     .then(() => process.exit(0))
-    .catch(err => {
+    .catch((err) => {
       console.error('시나리오 실행 오류:', err);
       process.exit(1);
     });

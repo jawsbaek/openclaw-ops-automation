@@ -3,13 +3,10 @@
  * SSH를 통한 원격 명령 안전 실행
  */
 
-import { promises as fs } from 'fs';
-import path from 'path';
-import SSHConnectionPool from './connection-pool.js';
-import createLogger from '../../lib/logger.js';
-import { readFileSync } from 'fs';
-
-const logger = createLogger('ssh-executor');
+const _fs = require('node:fs').promises;
+const _path = require('node:path');
+const SSHConnectionPool = require('./connection-pool');
+const logger = require('../../lib/logger');
 
 class RemoteExecutor {
   constructor(serversConfig, whitelistConfig) {
@@ -19,7 +16,7 @@ class RemoteExecutor {
       maxConnections: 50,
       idleTimeout: 300000
     });
-    
+
     this.executionHistory = [];
     this.pendingApprovals = new Map();
   }
@@ -29,7 +26,7 @@ class RemoteExecutor {
    */
   async execute(options) {
     const { target, command, options: execOptions = {} } = options;
-    
+
     // 명령 검증
     if (!this.isCommandAllowed(command, execOptions)) {
       throw new Error(`명령 실행 거부: ${command}`);
@@ -37,7 +34,7 @@ class RemoteExecutor {
 
     // 대상 서버 해석
     const hosts = this.resolveTargets(target);
-    
+
     if (hosts.length === 0) {
       throw new Error(`대상 서버를 찾을 수 없음: ${target}`);
     }
@@ -56,7 +53,7 @@ class RemoteExecutor {
     }
 
     // 병렬 또는 순차 실행
-    const results = execOptions.parallel 
+    const results = execOptions.parallel
       ? await this.executeParallel(command, hosts, execOptions)
       : await this.executeSequential(command, hosts, execOptions);
 
@@ -70,13 +67,12 @@ class RemoteExecutor {
    * 병렬 실행
    */
   async executeParallel(command, hosts, options) {
-    const promises = hosts.map(host => 
-      this.executeOnHost(host, command, options)
-        .catch(err => ({
-          host,
-          success: false,
-          error: err.message
-        }))
+    const promises = hosts.map((host) =>
+      this.executeOnHost(host, command, options).catch((err) => ({
+        host,
+        success: false,
+        error: err.message
+      }))
     );
 
     return await Promise.all(promises);
@@ -87,7 +83,7 @@ class RemoteExecutor {
    */
   async executeSequential(command, hosts, options) {
     const results = [];
-    
+
     for (const host of hosts) {
       try {
         const result = await this.executeOnHost(host, command, options);
@@ -100,7 +96,7 @@ class RemoteExecutor {
         });
       }
     }
-    
+
     return results;
   }
 
@@ -110,15 +106,15 @@ class RemoteExecutor {
   async executeOnHost(host, command, options) {
     const startTime = Date.now();
     const timeout = options.timeout || 30000;
-    
+
     try {
       const serverConfig = this.getServerConfig(host);
       const client = await this.connectionPool.getConnection(host, serverConfig);
-      
+
       const result = await this.execCommand(client, command, timeout);
-      
+
       this.connectionPool.releaseConnection(host);
-      
+
       return {
         host,
         success: result.exitCode === 0,
@@ -191,7 +187,7 @@ class RemoteExecutor {
       /dd\s+if=/,
       /mkfs/,
       /fdisk/,
-      /:(){ :|:& };:/  // fork bomb
+      /:(){ :|:& };:/ // fork bomb
     ];
 
     for (const pattern of dangerousPatterns) {
@@ -206,7 +202,7 @@ class RemoteExecutor {
     // 화이트리스트 체크
     const whitelist = this.whitelistConfig.allowedCommands || [];
     const commandBase = command.split(' ')[0];
-    
+
     return whitelist.includes(commandBase) || whitelist.includes('*');
   }
 
@@ -219,7 +215,7 @@ class RemoteExecutor {
     }
 
     // 그룹 체크
-    if (this.serversConfig.groups && this.serversConfig.groups[target]) {
+    if (this.serversConfig.groups?.[target]) {
       return this.serversConfig.groups[target];
     }
 
@@ -232,7 +228,7 @@ class RemoteExecutor {
    */
   getServerConfig(host) {
     const sshConfig = this.serversConfig.ssh || {};
-    
+
     return {
       host,
       port: sshConfig.port || 22,
@@ -246,7 +242,7 @@ class RemoteExecutor {
    */
   loadPrivateKey(keyPath) {
     try {
-      return readFileSync(keyPath, 'utf8');
+      return require('node:fs').readFileSync(keyPath, 'utf8');
     } catch (err) {
       logger.error(`SSH 키 로드 실패: ${keyPath}`, err);
       throw new Error('SSH 키를 찾을 수 없음');
@@ -258,9 +254,9 @@ class RemoteExecutor {
    */
   async requestApproval(command, hosts) {
     const requestId = Date.now().toString();
-    
+
     logger.warn(`승인 필요: ${command} on ${hosts.join(', ')}`);
-    
+
     // 실제로는 이벤트를 발생시켜 Orchestrator가 처리
     this.pendingApprovals.set(requestId, {
       command,
@@ -277,11 +273,11 @@ class RemoteExecutor {
    */
   simulateExecution(command, hosts) {
     logger.info(`[DRY-RUN] ${command} on ${hosts.join(', ')}`);
-    
+
     return {
       success: true,
       dryRun: true,
-      results: hosts.map(host => ({
+      results: hosts.map((host) => ({
         host,
         exitCode: 0,
         stdout: '[DRY-RUN] 실행되지 않음',
@@ -308,9 +304,9 @@ class RemoteExecutor {
       results,
       summary: this.getSummary(results)
     };
-    
+
     this.executionHistory.push(record);
-    
+
     // 최대 1000개 유지
     if (this.executionHistory.length > 1000) {
       this.executionHistory.shift();
@@ -330,7 +326,7 @@ class RemoteExecutor {
    */
   formatResults(results) {
     return {
-      success: results.every(r => r.success),
+      success: results.every((r) => r.success),
       results,
       summary: this.getSummary(results)
     };
@@ -342,8 +338,8 @@ class RemoteExecutor {
   getSummary(results) {
     return {
       total: results.length,
-      succeeded: results.filter(r => r.success).length,
-      failed: results.filter(r => !r.success).length
+      succeeded: results.filter((r) => r.success).length,
+      failed: results.filter((r) => !r.success).length
     };
   }
 
@@ -367,4 +363,4 @@ class RemoteExecutor {
   }
 }
 
-export default RemoteExecutor;
+module.exports = RemoteExecutor;

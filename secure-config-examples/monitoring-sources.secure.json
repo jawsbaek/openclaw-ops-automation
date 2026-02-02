@@ -32,26 +32,9 @@
   },
   "logs": {
     "enabled": true,
-    "paths": [
-      "/tmp/openclaw/openclaw-*.log",
-      "/var/log/openclaw/*.log"
-    ],
-    "error_patterns": [
-      "ERROR",
-      "FATAL",
-      "Exception",
-      "failed",
-      "timeout",
-      "unauthorized",
-      "forbidden"
-    ],
-    "security_patterns": [
-      "authentication failed",
-      "permission denied",
-      "invalid token",
-      "brute force",
-      "suspicious"
-    ],
+    "paths": ["/tmp/openclaw/openclaw-*.log", "/var/log/openclaw/*.log"],
+    "error_patterns": ["ERROR", "FATAL", "Exception", "failed", "timeout", "unauthorized", "forbidden"],
+    "security_patterns": ["authentication failed", "permission denied", "invalid token", "brute force", "suspicious"],
     "max_file_size_mb": 100,
     "sanitize_logs": true
   },

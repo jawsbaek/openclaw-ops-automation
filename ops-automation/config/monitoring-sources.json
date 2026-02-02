@@ -21,18 +21,8 @@
   },
   "logs": {
     "enabled": true,
-    "paths": [
-      "/tmp/openclaw/openclaw-*.log",
-      "/var/log/system.log",
-      "/usr/local/var/log/nginx/*.log"
-    ],
-    "error_patterns": [
-      "ERROR",
-      "FATAL",
-      "Exception",
-      "failed",
-      "timeout"
-    ]
+    "paths": ["/tmp/openclaw/openclaw-*.log", "/var/log/system.log", "/usr/local/var/log/nginx/*.log"],
+    "error_patterns": ["ERROR", "FATAL", "Exception", "failed", "timeout"]
   },
   "healthchecks": [
     {
@@ -54,8 +44,8 @@
   "processes": {
     "enabled": true,
     "watch": [
-      {"name": "openclaw", "pattern": "openclaw/dist/index.js", "critical": true},
-      {"name": "nginx", "pattern": "nginx: master", "critical": false}
+      { "name": "openclaw", "pattern": "openclaw/dist/index.js", "critical": true },
+      { "name": "nginx", "pattern": "nginx: master", "critical": false }
     ]
   }
 }

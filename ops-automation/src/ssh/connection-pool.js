@@ -3,11 +3,9 @@
  * 다중 서버에 대한 SSH 연결을 관리하고 재사용
  */
 
-import { Client } from 'ssh2';
-import { EventEmitter } from 'events';
-import createLogger from '../../lib/logger.js';
-
-const logger = createLogger('ssh-pool');
+const { Client } = require('ssh2');
+const EventEmitter = require('node:events');
+const logger = require('../../lib/logger');
 
 class SSHConnectionPool extends EventEmitter {
   constructor(options = {}) {
@@ -21,7 +19,7 @@ class SSHConnectionPool extends EventEmitter {
       activeConnections: 0,
       failedConnections: 0
     };
-    
+
     // 주기적으로 유휴 연결 정리
     this.cleanupInterval = setInterval(() => this.cleanup(), 60000);
   }
@@ -31,7 +29,7 @@ class SSHConnectionPool extends EventEmitter {
    */
   async getConnection(host, config) {
     const key = this.getConnectionKey(host);
-    
+
     // 기존 연결 재사용
     if (this.connections.has(key)) {
       const conn = this.connections.get(key);
@@ -57,7 +55,7 @@ class SSHConnectionPool extends EventEmitter {
    */
   async createConnection(host, config) {
     const key = this.getConnectionKey(host);
-    
+
     return new Promise((resolve, reject) => {
       const client = new Client();
       const timeout = setTimeout(() => {
@@ -67,7 +65,7 @@ class SSHConnectionPool extends EventEmitter {
 
       client.on('ready', () => {
         clearTimeout(timeout);
-        
+
         this.connections.set(key, {
           client,
           host,
@@ -75,10 +73,10 @@ class SSHConnectionPool extends EventEmitter {
           inUse: true,
           createdAt: Date.now()
         });
-        
+
         this.stats.totalConnections++;
         this.stats.activeConnections++;
-        
+
         logger.info(`SSH 연결 성공: ${host}`);
         this.emit('connected', host);
         resolve(client);
@@ -118,7 +116,7 @@ class SSHConnectionPool extends EventEmitter {
   releaseConnection(host) {
     const key = this.getConnectionKey(host);
     const conn = this.connections.get(key);
-    
+
     if (conn) {
       conn.inUse = false;
       conn.lastUsed = Date.now();
@@ -132,7 +130,7 @@ class SSHConnectionPool extends EventEmitter {
   closeConnection(host) {
     const key = this.getConnectionKey(host);
     const conn = this.connections.get(key);
-    
+
     if (conn) {
       conn.client.end();
       this.connections.delete(key);
@@ -146,11 +144,11 @@ class SSHConnectionPool extends EventEmitter {
    */
   closeAll() {
     logger.info(`모든 SSH 연결 종료 중 (${this.connections.size}개)`);
-    
-    for (const [key, conn] of this.connections.entries()) {
+
+    for (const [_key, conn] of this.connections.entries()) {
       conn.client.end();
     }
-    
+
     this.connections.clear();
     this.stats.activeConnections = 0;
     clearInterval(this.cleanupInterval);
@@ -162,10 +160,10 @@ class SSHConnectionPool extends EventEmitter {
   cleanup() {
     const now = Date.now();
     let cleaned = 0;
-    
+
     for (const [key, conn] of this.connections.entries()) {
       const idleTime = now - conn.lastUsed;
-      
+
       if (!conn.inUse && idleTime > this.idleTimeout) {
         conn.client.end();
         this.connections.delete(key);
@@ -173,7 +171,7 @@ class SSHConnectionPool extends EventEmitter {
         cleaned++;
       }
     }
-    
+
     if (cleaned > 0) {
       logger.info(`유휴 SSH 연결 ${cleaned}개 정리`);
     }
@@ -184,8 +182,8 @@ class SSHConnectionPool extends EventEmitter {
    */
   getStatus() {
     const connections = [];
-    
-    for (const [key, conn] of this.connections.entries()) {
+
+    for (const [_key, conn] of this.connections.entries()) {
       connections.push({
         host: conn.host,
         inUse: conn.inUse,
@@ -193,7 +191,7 @@ class SSHConnectionPool extends EventEmitter {
         uptime: Date.now() - conn.createdAt
       });
     }
-    
+
     return {
       stats: this.stats,
       connections,
@@ -210,4 +208,4 @@ class SSHConnectionPool extends EventEmitter {
   }
 }
 
-export default SSHConnectionPool;
+module.exports = SSHConnectionPool;

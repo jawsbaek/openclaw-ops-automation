@@ -3,11 +3,11 @@
  * @module agents/autoheal
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import { createLogger } from '../lib/logger.js';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import { loadAutoHealPlaybooks } from '../lib/config-loader.js';
 import { saveIncident } from '../lib/file-utils.js';
+import { createLogger } from '../lib/logger.js';
 
 const execAsync = promisify(exec);
 const logger = createLogger('autoheal');
@@ -21,7 +21,7 @@ const logger = createLogger('autoheal');
 function evaluateCondition(condition, context) {
   // Simple condition evaluation
   // In production, use a proper expression evaluator
-  
+
   // Example: "disk_usage > 90"
   const match = condition.match(/(\w+)\s*([><=]+)\s*(\d+)/);
   if (!match) return false;
@@ -33,12 +33,18 @@ function evaluateCondition(condition, context) {
   if (contextValue === undefined) return false;
 
   switch (operator) {
-    case '>': return contextValue > threshold;
-    case '<': return contextValue < threshold;
-    case '>=': return contextValue >= threshold;
-    case '<=': return contextValue <= threshold;
-    case '==': return contextValue == threshold;
-    default: return false;
+    case '>':
+      return contextValue > threshold;
+    case '<':
+      return contextValue < threshold;
+    case '>=':
+      return contextValue >= threshold;
+    case '<=':
+      return contextValue <= threshold;
+    case '==':
+      return contextValue === threshold;
+    default:
+      return false;
   }
 }
 
@@ -93,11 +99,11 @@ async function executeAction(command, context = {}) {
  */
 function findPlaybook(scenario, context) {
   const playbooks = loadAutoHealPlaybooks();
-  
+
   // Direct scenario match
   if (playbooks[scenario]) {
     const playbook = playbooks[scenario];
-    
+
     // Check condition if present
     if (playbook.condition) {
       if (!evaluateCondition(playbook.condition, context)) {
@@ -105,7 +111,7 @@ function findPlaybook(scenario, context) {
         return null;
       }
     }
-    
+
     return { name: scenario, ...playbook };
   }
 
@@ -127,7 +133,7 @@ function findPlaybook(scenario, context) {
  */
 export async function heal(scenario, context = {}) {
   const incidentId = `heal-${Date.now()}`;
-  
+
   logger.info('Starting AutoHeal', { incidentId, scenario, context });
 
   const startTime = Date.now();
@@ -209,15 +215,15 @@ function generateIncidentReport(result, context) {
   report += `## Actions Taken\n\n`;
   result.actions.forEach((action, idx) => {
     report += `### ${idx + 1}. ${action.success ? '✅' : '❌'} ${action.command}\n\n`;
-    
+
     if (action.stdout) {
       report += `**Output:**\n\`\`\`\n${action.stdout}\n\`\`\`\n\n`;
     }
-    
+
     if (action.stderr) {
       report += `**Stderr:**\n\`\`\`\n${action.stderr}\n\`\`\`\n\n`;
     }
-    
+
     if (action.error) {
       report += `**Error:**\n\`\`\`\n${action.error}\n\`\`\`\n\n`;
     }
@@ -241,11 +247,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const context = { disk_usage: 95 }; // Example context
 
   heal(scenario, context)
-    .then(result => {
+    .then((result) => {
       logger.info('AutoHeal run completed', result);
       process.exit(result.success ? 0 : 1);
     })
-    .catch(error => {
+    .catch((error) => {
       logger.error('AutoHeal failed', { error: error.message, stack: error.stack });
       process.exit(1);
     });
