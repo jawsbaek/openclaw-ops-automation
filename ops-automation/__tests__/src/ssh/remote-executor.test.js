@@ -100,8 +100,9 @@ describe('RemoteExecutor', () => {
       expect(executor.isCommandAllowed('dd if=/dev/zero of=/dev/sda', {})).toBe(false);
     });
 
-    test('should allow dangerous command with approval', () => {
-      expect(executor.isCommandAllowed('rm -rf /tmp/test', { requireApproval: true })).toBe(true);
+    test('should still block dangerous command even with approval if not whitelisted', () => {
+      // Dangerous commands need both approval AND whitelist entry
+      expect(executor.isCommandAllowed('rm -rf /tmp/test', { requireApproval: true })).toBe(false);
     });
 
     test('should block sudo by default', () => {
