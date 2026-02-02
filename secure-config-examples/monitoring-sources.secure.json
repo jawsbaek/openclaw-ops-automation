@@ -1,0 +1,118 @@
+{
+  "prometheus": {
+    "enabled": true,
+    "endpoint": "${PROMETHEUS_URL}",
+    "username": "${PROMETHEUS_USER}",
+    "password": "${PROMETHEUS_PASSWORD}",
+    "tls": {
+      "enabled": true,
+      "verify": true,
+      "ca_cert": "${PROMETHEUS_CA_CERT_PATH}",
+      "client_cert": "${PROMETHEUS_CLIENT_CERT_PATH}",
+      "client_key": "${PROMETHEUS_CLIENT_KEY_PATH}"
+    },
+    "queries": {
+      "cpu": "rate(node_cpu_seconds_total{mode!=\"idle\"}[5m])",
+      "memory": "node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes",
+      "disk": "node_filesystem_avail_bytes / node_filesystem_size_bytes",
+      "network_in": "rate(node_network_receive_bytes_total[5m])",
+      "network_out": "rate(node_network_transmit_bytes_total[5m])"
+    },
+    "timeout_seconds": 10
+  },
+  "system": {
+    "enabled": true,
+    "commands": {
+      "cpu": "top -l 1 | grep 'CPU usage' | awk '{print $3}' | sed 's/%//'",
+      "memory_used": "vm_stat | awk '/Pages active/ {print $3}' | sed 's/\\.//'",
+      "disk": "df -h / | awk 'NR==2 {print $5}' | sed 's/%//'",
+      "network": "netstat -ib | awk 'NR>1 {sum+=$7} END {print sum}'"
+    },
+    "timeout_seconds": 5
+  },
+  "logs": {
+    "enabled": true,
+    "paths": [
+      "/tmp/openclaw/openclaw-*.log",
+      "/var/log/openclaw/*.log"
+    ],
+    "error_patterns": [
+      "ERROR",
+      "FATAL",
+      "Exception",
+      "failed",
+      "timeout",
+      "unauthorized",
+      "forbidden"
+    ],
+    "security_patterns": [
+      "authentication failed",
+      "permission denied",
+      "invalid token",
+      "brute force",
+      "suspicious"
+    ],
+    "max_file_size_mb": 100,
+    "sanitize_logs": true
+  },
+  "healthchecks": [
+    {
+      "name": "OpenClaw Gateway",
+      "type": "command",
+      "command": "openclaw gateway status | grep 'RPC probe: ok'",
+      "interval": 60,
+      "timeout": 5,
+      "critical": true
+    },
+    {
+      "name": "Local API",
+      "type": "http",
+      "url": "${API_HEALTH_URL}",
+      "method": "GET",
+      "interval": 60,
+      "timeout": 5,
+      "expected_status": 200,
+      "tls_verify": true,
+      "critical": false
+    }
+  ],
+  "processes": {
+    "enabled": true,
+    "watch": [
+      {
+        "name": "openclaw",
+        "pattern": "openclaw/dist/index.js",
+        "critical": true
+      },
+      {
+        "name": "nginx",
+        "pattern": "nginx: master",
+        "critical": false
+      }
+    ]
+  },
+  "webhook_server": {
+    "enabled": true,
+    "port": 18789,
+    "host": "localhost",
+    "tls": {
+      "enabled": "${WEBHOOK_TLS_ENABLED}",
+      "cert": "${WEBHOOK_TLS_CERT_PATH}",
+      "key": "${WEBHOOK_TLS_KEY_PATH}"
+    },
+    "authentication": {
+      "required": true,
+      "methods": ["token", "signature"]
+    },
+    "rate_limit": {
+      "enabled": true,
+      "window_ms": 60000,
+      "max_requests": 100,
+      "per_source_limits": {
+        "prometheus": 1000,
+        "datadog": 500,
+        "unknown": 10
+      }
+    }
+  }
+}

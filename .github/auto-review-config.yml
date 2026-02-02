@@ -1,0 +1,229 @@
+# Auto-Review and Auto-Merge Configuration
+
+auto_merge:
+  # Enable or disable auto-merge functionality
+  enabled: true
+  
+  # Default merge strategy (squash, merge, rebase)
+  strategy: squash
+  
+  # Conditions that must be met for auto-merge
+  conditions:
+    # All CI checks must pass
+    all_checks_passed: true
+    
+    # PR must not have conflicts
+    no_conflicts: true
+    
+    # Minimum number of approvals required
+    min_approvals: 1
+    
+    # Minimum AI review score (0-10)
+    ai_review_score: 8
+    
+    # Security scan must be clean
+    security_scan_clean: true
+    
+    # Code coverage must meet threshold
+    coverage_threshold: 80
+  
+  # Authors allowed for auto-merge
+  allowed_authors:
+    - jawsbaek
+    - dependabot[bot]
+    # Add more GitHub usernames here
+  
+  # Branches excluded from auto-merge (must use manual merge)
+  excluded_branches:
+    - main
+    - master
+    - production
+    - release/*
+  
+  # Label configuration
+  labels:
+    # Label to enable auto-merge
+    auto_merge: "auto-merge"
+    
+    # Label to prevent auto-merge
+    hold: "hold"
+    
+    # Label for merge strategy override
+    merge_rebase: "merge-rebase"
+    merge_commit: "merge-commit"
+    merge_squash: "merge-squash"
+  
+  # Auto-delete branch after merge
+  delete_branch_on_merge: true
+  
+  # Wait time before merging (in seconds) - gives time for last-minute holds
+  merge_delay: 30
+
+review:
+  # Enable AI-powered code review
+  ai_enabled: true
+  
+  # Model to use for AI review (gpt-4, gpt-3.5-turbo, claude-3-opus, etc.)
+  ai_model: "gpt-4"
+  
+  # Enable security scanning
+  security_scan: true
+  
+  # Code coverage threshold (percentage)
+  coverage_threshold: 80
+  
+  # Review criteria weights (must sum to 100)
+  criteria:
+    code_quality:
+      weight: 30
+      checks:
+        - naming_conventions
+        - code_complexity
+        - code_duplication
+        - error_handling
+    
+    security:
+      weight: 40
+      checks:
+        - injection_vulnerabilities
+        - hardcoded_secrets
+        - authentication_issues
+        - authorization_issues
+        - data_validation
+    
+    performance:
+      weight: 15
+      checks:
+        - algorithm_efficiency
+        - memory_leaks
+        - n_plus_one_queries
+        - unnecessary_computations
+    
+    maintainability:
+      weight: 15
+      checks:
+        - documentation
+        - test_coverage
+        - modularity
+        - code_readability
+  
+  # Files to exclude from review
+  exclude_patterns:
+    - "*.min.js"
+    - "*.map"
+    - "package-lock.json"
+    - "yarn.lock"
+    - "node_modules/**"
+    - "dist/**"
+    - "build/**"
+    - "coverage/**"
+  
+  # Maximum files to review in one PR (to avoid hitting API limits)
+  max_files_per_review: 50
+  
+  # Auto-comment on PR with review results
+  auto_comment: true
+
+security:
+  # Vulnerability severity levels that block auto-merge
+  blocking_severities:
+    - critical
+    - high
+  
+  # Patterns to detect hardcoded secrets
+  secret_patterns:
+    - "api[_-]?key"
+    - "secret[_-]?key"
+    - "password"
+    - "token"
+    - "private[_-]?key"
+    - "access[_-]?token"
+    - "auth[_-]?token"
+    - "jwt"
+  
+  # Command injection patterns to detect
+  injection_patterns:
+    - "eval\\("
+    - "exec\\("
+    - "system\\("
+    - "shell_exec"
+    - "\\$\\{.*\\}"  # template injection
+    - "innerHTML\\s*="
+    - "dangerouslySetInnerHTML"
+  
+  # Enable npm audit
+  npm_audit: true
+  
+  # NPM audit level (low, moderate, high, critical)
+  npm_audit_level: moderate
+
+notifications:
+  # Enable notifications
+  enabled: true
+  
+  # Slack webhook URL (set as secret: SLACK_WEBHOOK)
+  slack:
+    enabled: true
+    webhook_url_secret: SLACK_WEBHOOK
+    channel: "#deployments"
+    mention_on_failure: true
+  
+  # Discord webhook URL (set as secret: DISCORD_WEBHOOK)
+  discord:
+    enabled: true
+    webhook_url_secret: DISCORD_WEBHOOK
+    mention_on_failure: true
+  
+  # Email notifications (if configured)
+  email:
+    enabled: false
+    recipients:
+      - ops@example.com
+
+rollback:
+  # Auto-create revert PR if issues detected after merge
+  enabled: true
+  
+  # Time window to watch for issues after merge (in minutes)
+  watch_period: 60
+  
+  # Conditions that trigger auto-revert
+  triggers:
+    - build_failure
+    - test_failure
+    - error_rate_spike
+    - performance_degradation
+
+# OpenClaw integration (optional)
+openclaw:
+  # Enable OpenClaw CLI integration
+  enabled: false
+  
+  # OpenClaw endpoint (if using webhook mode)
+  gateway_url: "http://localhost:3000"
+  
+  # Agent to spawn for code review
+  review_agent: "pr-reviewer"
+  
+  # Thinking level for review agent
+  thinking_level: "high"
+  
+  # Timeout for agent review (in seconds)
+  timeout: 300
+
+# Advanced settings
+advanced:
+  # Require linear history (no merge commits on feature branches)
+  require_linear_history: false
+  
+  # Require signed commits
+  require_signed_commits: false
+  
+  # Allow force pushes after approval (not recommended)
+  allow_force_push: false
+  
+  # Stale approval timeout (in hours) - re-approval needed if PR updated after this time
+  stale_approval_timeout: 24
+  
+  # Maximum PR size (number of changed lines) for auto-merge
+  max_pr_size: 1000

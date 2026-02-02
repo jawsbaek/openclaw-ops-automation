@@ -1,0 +1,41 @@
+# CODEOWNERS - Auto-assigned reviewers for PRs
+# More info: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+# These users will be requested for review when someone opens a PR
+*       @jawsbaek
+
+# GitHub Actions workflows - require review from repo admin
+/.github/workflows/    @jawsbaek
+
+# Security-sensitive files
+/scripts/security-scanner.js    @jawsbaek
+/scripts/pr-reviewer.js         @jawsbaek
+/.github/auto-review-config.yml @jawsbaek
+/SECURITY.md                    @jawsbaek
+
+# Configuration files
+*.yml     @jawsbaek
+*.yaml    @jawsbaek
+*.json    @jawsbaek
+
+# Documentation
+/docs/    @jawsbaek
+*.md      @jawsbaek
+
+# Core application code
+/ops-automation/    @jawsbaek
+
+# Tests
+/tests/   @jawsbaek
+*.test.js @jawsbaek
+*.spec.js @jawsbaek
+
+# Package management
+package.json      @jawsbaek
+package-lock.json @jawsbaek
+
+# Docker configuration
+Dockerfile        @jawsbaek
+docker-compose.yml @jawsbaek
+.dockerignore     @jawsbaek
