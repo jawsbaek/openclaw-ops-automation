@@ -22,9 +22,14 @@ vi.mock('../../lib/logger.js', () => ({
   }))
 }));
 
+vi.mock('../../src/jsm/jsm-integration.js', () => ({
+  createIncidentFromAlert: vi.fn(() => Promise.resolve(null))
+}));
+
 describe('Alert Handler', () => {
   let loadAlertThresholds;
   let getLatestMetrics;
+  let createIncidentFromAlert;
   let handleAlert;
   let processAlerts;
   let run;
@@ -55,12 +60,18 @@ describe('Alert Handler', () => {
       }))
     }));
 
+    vi.doMock('../../src/jsm/jsm-integration.js', () => ({
+      createIncidentFromAlert: vi.fn(() => Promise.resolve(null))
+    }));
+
     const configLoader = await import('../../lib/config-loader.js');
     const fileUtils = await import('../../lib/file-utils.js');
+    const jsmIntegration = await import('../../src/jsm/jsm-integration.js');
     const alertHandler = await import('../../agents/alert-handler.js');
 
     loadAlertThresholds = configLoader.loadAlertThresholds;
     getLatestMetrics = fileUtils.getLatestMetrics;
+    createIncidentFromAlert = jsmIntegration.createIncidentFromAlert;
     handleAlert = alertHandler.handleAlert;
     processAlerts = alertHandler.processAlerts;
     run = alertHandler.run;
@@ -650,6 +661,105 @@ describe('Alert Handler', () => {
 
       const alerts = await processAlerts();
       expect(alerts[0].shouldAutoHeal).toBe(false);
+    });
+  });
+
+  describe('JSM Integration', () => {
+    test('creates JSM ticket when handling alert', async () => {
+      createIncidentFromAlert.mockResolvedValue({
+        issueKey: 'TEST-123',
+        deduplicated: false
+      });
+
+      const testAlert = {
+        id: 'jsm-test-alert',
+        metric: 'cpu_usage',
+        value: 95,
+        level: 'critical',
+        message: 'CPU critical',
+        shouldAutoHeal: false
+      };
+
+      const result = await handleAlert(testAlert);
+
+      expect(createIncidentFromAlert).toHaveBeenCalledWith(testAlert);
+      expect(result.actions).toContain('jsm_ticket_created');
+      expect(result.jsmIssueKey).toBe('TEST-123');
+      expect(result.jsmDeduplicated).toBe(false);
+    });
+
+    test('handles JSM ticket deduplication', async () => {
+      createIncidentFromAlert.mockResolvedValue({
+        issueKey: 'TEST-100',
+        deduplicated: true
+      });
+
+      const testAlert = {
+        id: 'jsm-dedup-test',
+        metric: 'memory_usage',
+        value: 97,
+        level: 'critical',
+        message: 'Memory critical',
+        shouldAutoHeal: true
+      };
+
+      const result = await handleAlert(testAlert);
+
+      expect(result.jsmIssueKey).toBe('TEST-100');
+      expect(result.jsmDeduplicated).toBe(true);
+    });
+
+    test('handles JSM integration disabled', async () => {
+      createIncidentFromAlert.mockResolvedValue(null);
+
+      const testAlert = {
+        id: 'jsm-disabled-test',
+        metric: 'disk_usage',
+        value: 92,
+        level: 'critical',
+        message: 'Disk critical',
+        shouldAutoHeal: true
+      };
+
+      const result = await handleAlert(testAlert);
+
+      expect(result.actions).not.toContain('jsm_ticket_created');
+      expect(result.jsmIssueKey).toBeUndefined();
+    });
+
+    test('handles JSM integration error gracefully', async () => {
+      createIncidentFromAlert.mockRejectedValue(new Error('JSM API error'));
+
+      const testAlert = {
+        id: 'jsm-error-test',
+        metric: 'cpu_usage',
+        value: 95,
+        level: 'critical',
+        message: 'CPU critical',
+        shouldAutoHeal: false
+      };
+
+      const result = await handleAlert(testAlert);
+
+      expect(result.actions).toContain('logged');
+      expect(result.actions).not.toContain('jsm_ticket_created');
+      expect(result.jsmIssueKey).toBeUndefined();
+    });
+
+    test('skips JSM ticket creation when createJSMTicket option is false', async () => {
+      const testAlert = {
+        id: 'jsm-skip-test',
+        metric: 'cpu_usage',
+        value: 95,
+        level: 'critical',
+        message: 'CPU critical',
+        shouldAutoHeal: false
+      };
+
+      const result = await handleAlert(testAlert, { createJSMTicket: false });
+
+      expect(createIncidentFromAlert).not.toHaveBeenCalled();
+      expect(result.actions).not.toContain('jsm_ticket_created');
     });
   });
 });
