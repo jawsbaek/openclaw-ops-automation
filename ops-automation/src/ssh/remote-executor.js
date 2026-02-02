@@ -3,10 +3,13 @@
  * SSH를 통한 원격 명령 안전 실행
  */
 
-const fs = require('fs').promises;
-const path = require('path');
-const SSHConnectionPool = require('./connection-pool');
-const logger = require('../../lib/logger');
+import { promises as fs } from 'fs';
+import path from 'path';
+import SSHConnectionPool from './connection-pool.js';
+import createLogger from '../../lib/logger.js';
+import { readFileSync } from 'fs';
+
+const logger = createLogger('ssh-executor');
 
 class RemoteExecutor {
   constructor(serversConfig, whitelistConfig) {
@@ -243,7 +246,7 @@ class RemoteExecutor {
    */
   loadPrivateKey(keyPath) {
     try {
-      return require('fs').readFileSync(keyPath, 'utf8');
+      return readFileSync(keyPath, 'utf8');
     } catch (err) {
       logger.error(`SSH 키 로드 실패: ${keyPath}`, err);
       throw new Error('SSH 키를 찾을 수 없음');
@@ -364,4 +367,4 @@ class RemoteExecutor {
   }
 }
 
-module.exports = RemoteExecutor;
+export default RemoteExecutor;

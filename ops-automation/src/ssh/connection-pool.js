@@ -3,9 +3,11 @@
  * 다중 서버에 대한 SSH 연결을 관리하고 재사용
  */
 
-const { Client } = require('ssh2');
-const EventEmitter = require('events');
-const logger = require('../../lib/logger');
+import { Client } from 'ssh2';
+import { EventEmitter } from 'events';
+import createLogger from '../../lib/logger.js';
+
+const logger = createLogger('ssh-pool');
 
 class SSHConnectionPool extends EventEmitter {
   constructor(options = {}) {
@@ -208,4 +210,4 @@ class SSHConnectionPool extends EventEmitter {
   }
 }
 
-module.exports = SSHConnectionPool;
+export default SSHConnectionPool;
