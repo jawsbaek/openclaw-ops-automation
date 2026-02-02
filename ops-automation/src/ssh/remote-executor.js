@@ -346,6 +346,32 @@ class RemoteExecutor {
   }
 
   /**
+   * 실행 이력 조회
+   */
+  getExecutionHistory(limit = 100) {
+    const count = Math.min(limit, this.executionHistory.length);
+    return this.executionHistory.slice(-count).reverse();
+  }
+
+  /**
+   * 실행 통계
+   */
+  getStats() {
+    const total = this.executionHistory.length;
+    const successful = this.executionHistory.filter((r) =>
+      r.results.some((result) => result.success)
+    ).length;
+    const failed = total - successful;
+
+    return {
+      totalExecutions: total,
+      successfulExecutions: successful,
+      failedExecutions: failed,
+      successRate: total > 0 ? (successful / total) * 100 : 0
+    };
+  }
+
+  /**
    * 상태 조회
    */
   getStatus() {
