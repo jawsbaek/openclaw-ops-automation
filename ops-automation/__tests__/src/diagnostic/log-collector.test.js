@@ -9,7 +9,7 @@ import LogCollector from '../../../src/diagnostic/log-collector.js';
 const DEFAULT_MAX_BYTES = 1000000;
 const LARGE_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 const CONTEXT_LINES = 3;
-const DEFAULT_TAIL_LINES = 1000;
+const _DEFAULT_TAIL_LINES = 1000;
 
 describe('LogCollector', () => {
   let collector;

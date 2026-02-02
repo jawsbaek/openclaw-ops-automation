@@ -52,7 +52,7 @@ function detectApiDelay() {
  */
 async function checkDbConnectionStatus(sshExecutor) {
   console.log('\n2. DB 커넥션 상태 확인...');
-  
+
   const dbCheckResult = await sshExecutor.execute({
     target: 'db-master.example.com',
     command: 'psql -c "SELECT count(*) FROM pg_stat_activity;"'
@@ -277,7 +277,7 @@ async function dbConnectionLeakScenario() {
     await analyzeApplicationLogs(logCollector);
     const evidence = analyzeCodeForLeaks();
     const patch = await generateAutoPatch(evidence);
-    
+
     const deployManager = new DeployManager(sshExecutor);
     await performDryRunTest(deployManager, patch);
     await handleDeploymentApproval(deployManager, patch);

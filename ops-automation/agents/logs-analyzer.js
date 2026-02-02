@@ -167,7 +167,7 @@ function calculateOverallSeverity(results) {
  */
 function generateSummarySection(results, overallSeverity) {
   const totalFindings = results.reduce((sum, r) => sum + r.findings.total, 0);
-  
+
   let section = `## Summary\n\n`;
   section += `- **Total Issues Found:** ${totalFindings}\n`;
   section += `- **Log Files Analyzed:** ${results.length}\n\n`;
@@ -175,7 +175,7 @@ function generateSummarySection(results, overallSeverity) {
   section += `- 🔴 Critical: ${overallSeverity.critical}\n`;
   section += `- 🟠 Error: ${overallSeverity.error}\n`;
   section += `- 🟡 Warning: ${overallSeverity.warning}\n\n`;
-  
+
   return section;
 }
 
@@ -186,14 +186,14 @@ function generateSummarySection(results, overallSeverity) {
  */
 function generateAnomaliesSection(allAnomalies) {
   if (allAnomalies.length === 0) return '';
-  
+
   let section = `## ⚠️ Anomalies Detected\n\n`;
   allAnomalies.forEach((anomaly, idx) => {
     section += `### ${idx + 1}. ${anomaly.type} (${anomaly.severity})\n\n`;
     section += `- **Count:** ${anomaly.count}\n`;
     section += `- **Message:** ${anomaly.message}\n\n`;
   });
-  
+
   return section;
 }
 
@@ -206,7 +206,7 @@ function generateDetailedFinding(result) {
   let section = `### ${result.logFile}\n\n`;
 
   if (result.findings.total === 0) {
-    return section + `✅ No issues found.\n\n`;
+    return `${section}✅ No issues found.\n\n`;
   }
 
   section += `**Total Issues:** ${result.findings.total}\n\n`;
@@ -270,7 +270,7 @@ function generateReport(results) {
   report += generateSummarySection(results, overallSeverity);
   report += generateAnomaliesSection(allAnomalies);
   report += `## Detailed Findings\n\n`;
-  
+
   results.forEach((result) => {
     report += generateDetailedFinding(result);
   });
