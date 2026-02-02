@@ -6,11 +6,19 @@ reports/
 status/
 logs/
 
-# Sensitive
+# Sensitive - Never commit secrets!
 *.key
 *.pem
+*.crt
+*.p12
+*.pfx
 secrets/
+credentials/
 .env
+.env.local
+.env.*.local
+*.secret.json
+config/*.secret.*
 
 # macOS
 .DS_Store
