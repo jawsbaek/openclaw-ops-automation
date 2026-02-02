@@ -205,6 +205,12 @@ jobs:
             scripts/auto-merger.js
             scripts/security-scanner.js
 
+      - name: Debug Outputs
+        run: |
+          echo "ESLint passed: ${{ needs.code-quality.outputs.eslint-passed }}"
+          echo "Tests passed: ${{ needs.code-quality.outputs.tests-passed }}"
+          echo "Coverage passed: ${{ needs.code-quality.outputs.coverage-passed }}"
+
       - name: AI Code Review
         id: review
         env:
