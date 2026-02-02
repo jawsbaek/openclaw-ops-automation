@@ -18,24 +18,39 @@ const DeployManager = require('../src/code-healer/deploy-manager');
 const serversConfig = require('../config/servers.json');
 const whitelistConfig = require('../config/ssh-whitelist.json');
 
-async function dbConnectionLeakScenario() {
-  console.log('=== 데이터베이스 커넥션 고갈 자동 해결 ===\n');
+// Constants
+const API_RESPONSE_TIME_ALERT_VALUE = 5000; // 5초
+const API_RESPONSE_TIME_THRESHOLD = 500;
+const DEPLOYMENT_WAIT_TIME_MS = 5000;
+const PRE_DEPLOY_ACTIVE_CONNECTIONS = 495;
+const PRE_DEPLOY_RESPONSE_TIME = 5000;
+const POST_DEPLOY_ACTIVE_CONNECTIONS = 45;
+const POST_DEPLOY_RESPONSE_TIME = 250;
+const DEFAULT_DEPLOY_STAGES = 5;
 
-  const sshExecutor = new RemoteExecutor(serversConfig, whitelistConfig);
-  const logCollector = new LogCollector(sshExecutor);
-
-  // 1. API 지연 감지 (가정)
+/**
+ * Detects API delay alert
+ * @returns {Object} Alert information
+ */
+function detectApiDelay() {
   console.log('1. API 지연 감지');
   const alert = {
     type: 'api_slow_response',
     severity: 'critical',
     metric: 'response_time',
-    value: 5000, // 5초
-    threshold: 500
+    value: API_RESPONSE_TIME_ALERT_VALUE,
+    threshold: API_RESPONSE_TIME_THRESHOLD
   };
   console.log('응답 시간:', `${alert.value}ms (임계값: ${alert.threshold}ms)`);
+  return alert;
+}
 
-  // 2. DB 커넥션 상태 확인
+/**
+ * Checks database connection status
+ * @param {Object} sshExecutor - SSH executor instance
+ * @returns {Promise<Object>} Connection check result
+ */
+async function checkDbConnectionStatus(sshExecutor) {
   console.log('\n2. DB 커넥션 상태 확인...');
 
   const dbCheckResult = await sshExecutor.execute({
@@ -44,8 +59,15 @@ async function dbConnectionLeakScenario() {
   });
 
   console.log('활성 커넥션 수:', dbCheckResult.results[0]?.stdout || 'N/A');
+  return dbCheckResult;
+}
 
-  // 3. 애플리케이션 로그 분석
+/**
+ * Analyzes application logs for connection errors
+ * @param {Object} logCollector - Log collector instance
+ * @returns {Promise<Object>} Error analysis results
+ */
+async function analyzeApplicationLogs(logCollector) {
   console.log('\n3. 애플리케이션 로그 분석...');
 
   const errors = await logCollector.collectErrors(
@@ -66,7 +88,14 @@ async function dbConnectionLeakScenario() {
     console.log('샘플 에러:', connectionErrors[0].message);
   }
 
-  // 4. 코드 분석 - 커넥션 누수 패턴 찾기
+  return { errors, connectionErrors };
+}
+
+/**
+ * Analyzes code for connection leak patterns
+ * @returns {Array<string>} Evidence of connection leaks
+ */
+function analyzeCodeForLeaks() {
   console.log('\n4. 코드 분석 중...');
 
   const evidence = [
@@ -77,9 +106,19 @@ async function dbConnectionLeakScenario() {
   ];
 
   console.log('발견된 증거:');
-  evidence.forEach((e) => console.log('  -', e));
+  evidence.forEach((e) => {
+    console.log('  -', e);
+  });
 
-  // 5. 자동 패치 생성
+  return evidence;
+}
+
+/**
+ * Generates automatic patch for connection leak
+ * @param {Array<string>} evidence - Evidence of connection leaks
+ * @returns {Promise<Object>} Generated patch
+ */
+async function generateAutoPatch(evidence) {
   console.log('\n5. 자동 패치 생성...');
 
   const patchGenerator = new PatchGenerator();
@@ -95,7 +134,6 @@ async function dbConnectionLeakScenario() {
   console.log('패치 타입:', patch.pattern);
   console.log('신뢰도:', patch.confidence);
 
-  // 패치 내용 표시
   console.log('\n생성된 패치:');
   patch.changes.forEach((change) => {
     console.log(`\n파일: ${change.file}`);
@@ -107,10 +145,17 @@ async function dbConnectionLeakScenario() {
     });
   });
 
-  // 6. Dry-run 배포 테스트
-  console.log('\n6. Dry-run 배포 테스트...');
+  return patch;
+}
 
-  const deployManager = new DeployManager(sshExecutor);
+/**
+ * Performs dry-run deployment test
+ * @param {Object} deployManager - Deploy manager instance
+ * @param {Object} patch - Patch to deploy
+ * @returns {Promise<Object>} Dry-run result
+ */
+async function performDryRunTest(deployManager, patch) {
+  console.log('\n6. Dry-run 배포 테스트...');
 
   const dryRunResult = await deployManager.deployHotfix({
     patch,
@@ -124,9 +169,18 @@ async function dbConnectionLeakScenario() {
   });
 
   console.log('[DRY-RUN] 배포 시뮬레이션 완료');
-  console.log('예상 배포 단계:', dryRunResult.stages?.length || 5);
+  console.log('예상 배포 단계:', dryRunResult.stages?.length || DEFAULT_DEPLOY_STAGES);
 
-  // 7. 승인 요청 (실제 배포는 승인 필요)
+  return dryRunResult;
+}
+
+/**
+ * Handles deployment approval process
+ * @param {Object} deployManager - Deploy manager instance
+ * @param {Object} patch - Patch to deploy
+ * @returns {Promise<void>}
+ */
+async function handleDeploymentApproval(deployManager, patch) {
   console.log('\n7. 실제 배포 승인 대기...');
 
   const approvalRequired = true;
@@ -136,7 +190,6 @@ async function dbConnectionLeakScenario() {
     console.log('승인 후 다음 명령 실행:');
     console.log(`  node deploy-approved.js ${patch.id}`);
   } else {
-    // 자동 배포 (테스트 환경만)
     console.log('\n8. 테스트 환경 자동 배포...');
 
     const deployment = await deployManager.deployHotfix({
@@ -152,21 +205,25 @@ async function dbConnectionLeakScenario() {
 
     console.log('테스트 배포 완료:', deployment.status);
   }
+}
 
-  // 8. 배포 후 검증 (가정)
+/**
+ * Verifies deployment and measures improvement
+ * @returns {Promise<Object>} Verification results
+ */
+async function verifyDeployment() {
   console.log('\n9. 배포 후 검증 (시뮬레이션)...');
 
-  // 1분 후 커넥션 수 재확인
-  await new Promise((resolve) => setTimeout(resolve, 5000)); // 5초 대기 (시뮬레이션)
+  await new Promise((resolve) => setTimeout(resolve, DEPLOYMENT_WAIT_TIME_MS));
 
   const postDeployCheck = {
     before: {
-      activeConnections: 495,
-      responseTime: 5000
+      activeConnections: PRE_DEPLOY_ACTIVE_CONNECTIONS,
+      responseTime: PRE_DEPLOY_RESPONSE_TIME
     },
     after: {
-      activeConnections: 45,
-      responseTime: 250
+      activeConnections: POST_DEPLOY_ACTIVE_CONNECTIONS,
+      responseTime: POST_DEPLOY_RESPONSE_TIME
     }
   };
 
@@ -191,7 +248,14 @@ async function dbConnectionLeakScenario() {
     console.log('\n🎉 커넥션 누수 해결 성공!');
   }
 
-  // 10. PR 생성 (옵션)
+  return { postDeployCheck, improvement };
+}
+
+/**
+ * Creates pull request for the fix
+ * @returns {void}
+ */
+function createPullRequest() {
   console.log('\n10. Pull Request 생성...');
   console.log('[시뮬레이션] PR 생성됨: https://github.com/company/main-api/pull/123');
   console.log('제목: [AutoPatch] Fix database connection leak in query-handler');
@@ -199,10 +263,30 @@ async function dbConnectionLeakScenario() {
   console.log('  - Added try-finally block for connection cleanup');
   console.log('  - Ensures connection.close() is called in error path');
   console.log('  - Auto-generated by OpenClaw Ops Automation');
+}
 
-  // 정리
-  sshExecutor.shutdown();
-  console.log('\n시나리오 완료');
+async function dbConnectionLeakScenario() {
+  console.log('=== 데이터베이스 커넥션 고갈 자동 해결 ===\n');
+
+  const sshExecutor = new RemoteExecutor(serversConfig, whitelistConfig);
+  const logCollector = new LogCollector(sshExecutor);
+
+  try {
+    detectApiDelay();
+    await checkDbConnectionStatus(sshExecutor);
+    await analyzeApplicationLogs(logCollector);
+    const evidence = analyzeCodeForLeaks();
+    const patch = await generateAutoPatch(evidence);
+
+    const deployManager = new DeployManager(sshExecutor);
+    await performDryRunTest(deployManager, patch);
+    await handleDeploymentApproval(deployManager, patch);
+    await verifyDeployment();
+    createPullRequest();
+  } finally {
+    sshExecutor.shutdown();
+    console.log('\n시나리오 완료');
+  }
 }
 
 // 실행

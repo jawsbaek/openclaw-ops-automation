@@ -5,9 +5,9 @@
  * Detects hardcoded secrets and command injection patterns
  */
 
-const fs = require('node:fs');
-const path = require('node:path');
-const { execSync } = require('node:child_process');
+import { execSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
 // Secret patterns to detect
 const SECRET_PATTERNS = [
@@ -108,7 +108,8 @@ const INJECTION_PATTERNS = [
   },
   {
     name: 'SQL string concatenation',
-    pattern: /(?:SELECT|INSERT|UPDATE|DELETE)[\s\S]*?(?:\+|\$\{)[\s\S]*?(?:FROM|INTO|SET|WHERE)/gi,
+    // Match actual SQL queries with string concatenation, not just keywords in comments
+    pattern: /(?:['"`])\s*(?:SELECT|INSERT|UPDATE|DELETE)\s+[\w*,\s]+\s+(?:FROM|INTO)\s+[\w]+[\s\S]{0,50}(?:\+|\$\{)/gi,
     severity: 'critical',
     message: 'Potential SQL injection via string concatenation'
   }
@@ -199,7 +200,11 @@ class SecurityScanner {
       /node_modules\//,
       /dist\//,
       /build\//,
-      /coverage\//
+      /coverage\//,
+      // Skip security-related scripts that contain detection patterns
+      /scripts\/pr-reviewer\.js$/,
+      /scripts\/security-scanner\.js$/,
+      /scripts\/auto-merger\.js$/
     ];
 
     return skipPatterns.some((pattern) => pattern.test(file));
@@ -369,7 +374,7 @@ class SecurityScanner {
 }
 
 // CLI execution
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const scanType = process.argv[2] || 'all';
 
   const scanner = new SecurityScanner(scanType);
@@ -385,4 +390,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = SecurityScanner;
+export default SecurityScanner;

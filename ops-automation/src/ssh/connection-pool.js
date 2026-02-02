@@ -3,8 +3,8 @@
  * 다중 서버에 대한 SSH 연결을 관리하고 재사용
  */
 
-import { Client } from 'ssh2';
 import { EventEmitter } from 'node:events';
+import { Client } from 'ssh2';
 import createLogger from '../../lib/logger.js';
 
 const logger = createLogger('connection-pool');

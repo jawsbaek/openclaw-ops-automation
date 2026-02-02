@@ -3,10 +3,8 @@
  * SSH를 통한 원격 명령 안전 실행
  */
 
-import { promises as _fs } from 'node:fs';
-import _path from 'node:path';
-import SSHConnectionPool from './connection-pool.js';
 import createLogger from '../../lib/logger.js';
+import SSHConnectionPool from './connection-pool.js';
 
 const logger = createLogger('remote-executor');
 
@@ -342,6 +340,30 @@ class RemoteExecutor {
       total: results.length,
       succeeded: results.filter((r) => r.success).length,
       failed: results.filter((r) => !r.success).length
+    };
+  }
+
+  /**
+   * 실행 이력 조회
+   */
+  getExecutionHistory(limit = 100) {
+    const count = Math.min(limit, this.executionHistory.length);
+    return this.executionHistory.slice(-count).reverse();
+  }
+
+  /**
+   * 실행 통계
+   */
+  getStats() {
+    const total = this.executionHistory.length;
+    const successful = this.executionHistory.filter((r) => r.results.some((result) => result.success)).length;
+    const failed = total - successful;
+
+    return {
+      totalExecutions: total,
+      successfulExecutions: successful,
+      failedExecutions: failed,
+      successRate: total > 0 ? (successful / total) * 100 : 0
     };
   }
 

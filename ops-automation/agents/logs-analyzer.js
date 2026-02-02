@@ -11,6 +11,17 @@ import { createLogger } from '../lib/logger.js';
 const logger = createLogger('logs-analyzer');
 
 /**
+ * Constants
+ */
+const DEFAULT_TAIL_LINES = 1000;
+const MAX_SAMPLE_LINES_PER_PATTERN = 3;
+const REPEATED_ERROR_THRESHOLD = 10;
+const RECENT_ERRORS_WINDOW = 50;
+const ERROR_BURST_THRESHOLD = 30;
+const MAX_SAMPLE_ERRORS_DISPLAY = 5;
+const NORMALIZED_ERROR_LENGTH = 100;
+
+/**
  * Error pattern definitions
  */
 const ERROR_PATTERNS = [
@@ -32,7 +43,7 @@ const ERROR_PATTERNS = [
  * @param {number} tailLines - Number of lines to read from end (0 = all)
  * @returns {string} Log file content
  */
-function readLogFile(logPath, tailLines = 1000) {
+function readLogFile(logPath, tailLines = DEFAULT_TAIL_LINES) {
   if (!existsSync(logPath)) {
     logger.warn(`Log file not found: ${logPath}`);
     return '';
@@ -77,7 +88,7 @@ function analyzePatterns(content) {
       findings.bySeverity[errorDef.severity] += count;
       findings.byCategory[errorDef.category] = (findings.byCategory[errorDef.category] || 0) + count;
 
-      const sampleLines = lines.filter((line) => errorDef.pattern.test(line)).slice(0, 3);
+      const sampleLines = lines.filter((line) => errorDef.pattern.test(line)).slice(0, MAX_SAMPLE_LINES_PER_PATTERN);
       if (sampleLines.length > 0) {
         findings.samples.push({
           category: errorDef.category,
@@ -104,13 +115,13 @@ function detectAnomalies(content) {
   const errorCounts = {};
   lines.forEach((line) => {
     if (/error|ERROR|Error/i.test(line)) {
-      const normalized = line.replace(/\d{4}-\d{2}-\d{2}.*?\s/, '').slice(0, 100);
+      const normalized = line.replace(/\d{4}-\d{2}-\d{2}.*?\s/, '').slice(0, NORMALIZED_ERROR_LENGTH);
       errorCounts[normalized] = (errorCounts[normalized] || 0) + 1;
     }
   });
 
   Object.entries(errorCounts).forEach(([msg, count]) => {
-    if (count > 10) {
+    if (count > REPEATED_ERROR_THRESHOLD) {
       anomalies.push({
         type: 'repeated_error',
         count,
@@ -120,8 +131,8 @@ function detectAnomalies(content) {
     }
   });
 
-  const recentErrors = lines.filter((l) => /error|ERROR|Error/i.test(l)).slice(-50);
-  if (recentErrors.length > 30) {
+  const recentErrors = lines.filter((l) => /error|ERROR|Error/i.test(l)).slice(-RECENT_ERRORS_WINDOW);
+  if (recentErrors.length > ERROR_BURST_THRESHOLD) {
     anomalies.push({
       type: 'error_burst',
       count: recentErrors.length,
@@ -134,86 +145,137 @@ function detectAnomalies(content) {
 }
 
 /**
- * Generates markdown report from analysis results
- * @param {Object} results - Analysis results
- * @returns {string} Markdown formatted report
+ * Calculates overall severity breakdown from results
+ * @param {Array} results - Analysis results
+ * @returns {Object} Severity counts by type
  */
-function generateReport(results) {
-  const timestamp = new Date().toISOString();
-  let report = `# Log Analysis Report\n\n`;
-  report += `**Generated:** ${timestamp}\n\n`;
-  report += `## Summary\n\n`;
-
-  let totalFindings = 0;
-  results.forEach((r) => (totalFindings += r.findings.total));
-
-  report += `- **Total Issues Found:** ${totalFindings}\n`;
-  report += `- **Log Files Analyzed:** ${results.length}\n\n`;
-
+function calculateOverallSeverity(results) {
   const overallSeverity = { critical: 0, error: 0, warning: 0 };
   results.forEach((r) => {
     overallSeverity.critical += r.findings.bySeverity.critical;
     overallSeverity.error += r.findings.bySeverity.error;
     overallSeverity.warning += r.findings.bySeverity.warning;
   });
+  return overallSeverity;
+}
 
-  report += `### Severity Breakdown\n\n`;
-  report += `- 🔴 Critical: ${overallSeverity.critical}\n`;
-  report += `- 🟠 Error: ${overallSeverity.error}\n`;
-  report += `- 🟡 Warning: ${overallSeverity.warning}\n\n`;
+/**
+ * Generates summary section of report
+ * @param {Array} results - Analysis results
+ * @param {Object} overallSeverity - Severity breakdown
+ * @returns {string} Summary section markdown
+ */
+function generateSummarySection(results, overallSeverity) {
+  const totalFindings = results.reduce((sum, r) => sum + r.findings.total, 0);
 
-  const allAnomalies = results.flatMap((r) => r.anomalies);
-  if (allAnomalies.length > 0) {
-    report += `## ⚠️ Anomalies Detected\n\n`;
-    allAnomalies.forEach((anomaly, idx) => {
-      report += `### ${idx + 1}. ${anomaly.type} (${anomaly.severity})\n\n`;
-      report += `- **Count:** ${anomaly.count}\n`;
-      report += `- **Message:** ${anomaly.message}\n\n`;
+  let section = `## Summary\n\n`;
+  section += `- **Total Issues Found:** ${totalFindings}\n`;
+  section += `- **Log Files Analyzed:** ${results.length}\n\n`;
+  section += `### Severity Breakdown\n\n`;
+  section += `- 🔴 Critical: ${overallSeverity.critical}\n`;
+  section += `- 🟠 Error: ${overallSeverity.error}\n`;
+  section += `- 🟡 Warning: ${overallSeverity.warning}\n\n`;
+
+  return section;
+}
+
+/**
+ * Generates anomalies section of report
+ * @param {Array} allAnomalies - All detected anomalies
+ * @returns {string} Anomalies section markdown
+ */
+function generateAnomaliesSection(allAnomalies) {
+  if (allAnomalies.length === 0) return '';
+
+  let section = `## ⚠️ Anomalies Detected\n\n`;
+  allAnomalies.forEach((anomaly, idx) => {
+    section += `### ${idx + 1}. ${anomaly.type} (${anomaly.severity})\n\n`;
+    section += `- **Count:** ${anomaly.count}\n`;
+    section += `- **Message:** ${anomaly.message}\n\n`;
+  });
+
+  return section;
+}
+
+/**
+ * Generates detailed findings section for a single result
+ * @param {Object} result - Single analysis result
+ * @returns {string} Detailed finding markdown
+ */
+function generateDetailedFinding(result) {
+  let section = `### ${result.logFile}\n\n`;
+
+  if (result.findings.total === 0) {
+    return `${section}✅ No issues found.\n\n`;
+  }
+
+  section += `**Total Issues:** ${result.findings.total}\n\n`;
+
+  const categories = Object.entries(result.findings.byCategory);
+  if (categories.length > 0) {
+    section += `**By Category:**\n\n`;
+    categories.forEach(([cat, count]) => {
+      section += `- ${cat}: ${count}\n`;
+    });
+    section += `\n`;
+  }
+
+  if (result.findings.samples.length > 0) {
+    section += `**Sample Errors:**\n\n`;
+    result.findings.samples.slice(0, MAX_SAMPLE_ERRORS_DISPLAY).forEach((sample) => {
+      section += `**${sample.category}** (${sample.severity}, count: ${sample.count}):\n`;
+      section += `\`\`\`\n${sample.examples[0]}\n\`\`\`\n\n`;
     });
   }
 
-  report += `## Detailed Findings\n\n`;
-  results.forEach((result) => {
-    report += `### ${result.logFile}\n\n`;
+  return section;
+}
 
-    if (result.findings.total === 0) {
-      report += `✅ No issues found.\n\n`;
-      return;
-    }
-
-    report += `**Total Issues:** ${result.findings.total}\n\n`;
-
-    const categories = Object.entries(result.findings.byCategory);
-    if (categories.length > 0) {
-      report += `**By Category:**\n\n`;
-      categories.forEach(([cat, count]) => {
-        report += `- ${cat}: ${count}\n`;
-      });
-      report += `\n`;
-    }
-
-    if (result.findings.samples.length > 0) {
-      report += `**Sample Errors:**\n\n`;
-      result.findings.samples.slice(0, 5).forEach((sample) => {
-        report += `**${sample.category}** (${sample.severity}, count: ${sample.count}):\n`;
-        report += `\`\`\`\n${sample.examples[0]}\n\`\`\`\n\n`;
-      });
-    }
-  });
-
-  report += `## Recommendations\n\n`;
+/**
+ * Generates recommendations section
+ * @param {Object} overallSeverity - Severity breakdown
+ * @param {Array} allAnomalies - All detected anomalies
+ * @returns {string} Recommendations section markdown
+ */
+function generateRecommendationsSection(overallSeverity, allAnomalies) {
+  let section = `## Recommendations\n\n`;
 
   if (overallSeverity.critical > 0) {
-    report += `- 🔴 **URGENT**: ${overallSeverity.critical} critical issues require immediate attention\n`;
+    section += `- 🔴 **URGENT**: ${overallSeverity.critical} critical issues require immediate attention\n`;
   }
 
   if (allAnomalies.some((a) => a.type === 'error_burst')) {
-    report += `- ⚠️ Error burst detected - investigate for system issues\n`;
+    section += `- ⚠️ Error burst detected - investigate for system issues\n`;
   }
 
   if (allAnomalies.some((a) => a.type === 'repeated_error')) {
-    report += `- 🔁 Repeated errors detected - may indicate persistent bug or configuration issue\n`;
+    section += `- 🔁 Repeated errors detected - may indicate persistent bug or configuration issue\n`;
   }
+
+  return section;
+}
+
+/**
+ * Generates markdown report from analysis results
+ * @param {Object} results - Analysis results
+ * @returns {string} Markdown formatted report
+ */
+function generateReport(results) {
+  const timestamp = new Date().toISOString();
+  const overallSeverity = calculateOverallSeverity(results);
+  const allAnomalies = results.flatMap((r) => r.anomalies);
+
+  let report = `# Log Analysis Report\n\n`;
+  report += `**Generated:** ${timestamp}\n\n`;
+  report += generateSummarySection(results, overallSeverity);
+  report += generateAnomaliesSection(allAnomalies);
+  report += `## Detailed Findings\n\n`;
+
+  results.forEach((result) => {
+    report += generateDetailedFinding(result);
+  });
+
+  report += generateRecommendationsSection(overallSeverity, allAnomalies);
 
   return report;
 }
@@ -238,7 +300,7 @@ export async function analyzeLogs() {
   for (const logPath of logPaths) {
     logger.info(`Analyzing log: ${logPath}`);
 
-    const content = readLogFile(logPath, 1000);
+    const content = readLogFile(logPath, DEFAULT_TAIL_LINES);
     if (!content) continue;
 
     const findings = analyzePatterns(content);

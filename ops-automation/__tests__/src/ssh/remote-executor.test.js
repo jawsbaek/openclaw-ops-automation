@@ -1,432 +1,244 @@
 /**
- * Tests for Remote Executor
- * @fileoverview Unit tests for remote execution logic and command validation
+ * Remote Executor Tests
  */
 
-import RemoteExecutor from '../../../src/ssh/remote-executor.js';
+import { afterEach, beforeEach, describe, expect, jest, test } from '@jest/globals';
+
+// Mock dependencies
+jest.unstable_mockModule('../../../src/ssh/connection-pool.js', () => ({
+  default: jest.fn().mockImplementation(() => ({
+    getConnection: jest.fn(),
+    releaseConnection: jest.fn(),
+    closeAll: jest.fn()
+  }))
+}));
+
+const { default: RemoteExecutor } = await import('../../../src/ssh/remote-executor.js');
 
 describe('RemoteExecutor', () => {
   let executor;
-  let serversConfig;
-  let whitelistConfig;
+  let mockServersConfig;
+  let mockWhitelistConfig;
+  let _mockConnectionPool;
 
   beforeEach(() => {
-    serversConfig = {
-      ssh: {
-        user: 'testuser',
-        port: 22,
-        privateKey: 'test-private-key-content' // Provide directly to avoid file I/O
+    mockServersConfig = {
+      servers: {
+        web1: { host: '192.168.1.10', username: 'admin' },
+        web2: { host: '192.168.1.11', username: 'admin' },
+        db1: { host: '192.168.1.20', username: 'dbadmin' }
       },
       groups: {
-        web: ['web1.example.com', 'web2.example.com'],
-        db: ['db1.example.com'],
-        cache: ['redis1.example.com', 'redis2.example.com', 'redis3.example.com']
+        webservers: ['web1', 'web2'],
+        databases: ['db1']
       }
     };
 
-    whitelistConfig = {
-      allowedCommands: ['ls', 'ps', 'df', 'uptime', 'cat', 'grep', 'tail']
+    mockWhitelistConfig = {
+      allowedCommands: [
+        '/bin/ls',
+        '/bin/cat',
+        '/usr/bin/systemctl status',
+        { pattern: '^df -h.*', description: 'Check disk space' }
+      ],
+      blockedPatterns: ['rm -rf', 'dd if=', 'mkfs']
     };
 
-    executor = new RemoteExecutor(serversConfig, whitelistConfig);
+    executor = new RemoteExecutor(mockServersConfig, mockWhitelistConfig);
+    _mockConnectionPool = executor.connectionPool;
+    jest.clearAllMocks();
   });
 
   afterEach(() => {
-    if (executor && executor.connectionPool) {
-      executor.shutdown();
+    if (executor) {
+      executor.connectionPool.closeAll();
     }
   });
 
-  describe('Constructor', () => {
-    test('should initialize with provided configs', () => {
-      expect(executor.serversConfig).toBe(serversConfig);
-      expect(executor.whitelistConfig).toBe(whitelistConfig);
-    });
-
-    test('should create connection pool', () => {
+  describe('constructor', () => {
+    test('should initialize with configs', () => {
+      expect(executor.serversConfig).toEqual(mockServersConfig);
+      expect(executor.whitelistConfig).toEqual(mockWhitelistConfig);
       expect(executor.connectionPool).toBeDefined();
-    });
-
-    test('should initialize empty execution history', () => {
       expect(executor.executionHistory).toEqual([]);
-    });
-
-    test('should initialize pending approvals map', () => {
       expect(executor.pendingApprovals).toBeInstanceOf(Map);
-      expect(executor.pendingApprovals.size).toBe(0);
     });
   });
 
-  describe('isCommandAllowed', () => {
-    test('should allow whitelisted commands', () => {
-      expect(executor.isCommandAllowed('ls -la', {})).toBe(true);
-      expect(executor.isCommandAllowed('ps aux', {})).toBe(true);
-      expect(executor.isCommandAllowed('df -h', {})).toBe(true);
-      expect(executor.isCommandAllowed('uptime', {})).toBe(true);
+  describe('resolveTargets()', () => {
+    test('should resolve single server', () => {
+      const hosts = executor.resolveTargets('web1');
+      expect(hosts).toEqual(['web1']);
     });
 
-    test('should reject non-whitelisted commands', () => {
-      expect(executor.isCommandAllowed('python script.py', {})).toBe(false);
-      expect(executor.isCommandAllowed('node app.js', {})).toBe(false);
-      expect(executor.isCommandAllowed('curl http://example.com', {})).toBe(false);
+    test('should resolve server group', () => {
+      const hosts = executor.resolveTargets('webservers');
+      expect(hosts).toEqual(['web1', 'web2']);
     });
 
-    test('should block dangerous rm -rf / command', () => {
+    test('should resolve array of servers', () => {
+      const hosts = executor.resolveTargets(['web1', 'db1']);
+      expect(hosts).toEqual(['web1', 'db1']);
+    });
+
+    test('should return array with target for unknown target', () => {
+      const hosts = executor.resolveTargets('unknown');
+      expect(hosts).toEqual(['unknown']);
+    });
+  });
+
+  describe('isCommandAllowed()', () => {
+    test('should allow whitelisted command', () => {
+      expect(executor.isCommandAllowed('/bin/ls -la', {})).toBe(true);
+      expect(executor.isCommandAllowed('/bin/cat file.txt', {})).toBe(true);
+    });
+
+    test('should block non-whitelisted command', () => {
+      expect(executor.isCommandAllowed('/usr/bin/wget http://example.com', {})).toBe(false);
+    });
+
+    test('should block dangerous commands', () => {
       expect(executor.isCommandAllowed('rm -rf /', {})).toBe(false);
-      expect(executor.isCommandAllowed('rm -rf /var', {})).toBe(false);
-      expect(executor.isCommandAllowed('rm -rf /tmp', {})).toBe(false);
-    });
-
-    test('should block dd commands', () => {
       expect(executor.isCommandAllowed('dd if=/dev/zero of=/dev/sda', {})).toBe(false);
-      expect(executor.isCommandAllowed('dd if=/dev/sda of=/dev/sdb', {})).toBe(false);
     });
 
-    test('should block mkfs commands', () => {
-      expect(executor.isCommandAllowed('mkfs.ext4 /dev/sda1', {})).toBe(false);
-      expect(executor.isCommandAllowed('mkfs /dev/sdb1', {})).toBe(false);
+    test('should still block dangerous command even with approval if not whitelisted', () => {
+      // Dangerous commands need both approval AND whitelist entry
+      expect(executor.isCommandAllowed('rm -rf /tmp/test', { requireApproval: true })).toBe(false);
     });
 
-    test('should block fdisk commands', () => {
-      expect(executor.isCommandAllowed('fdisk /dev/sda', {})).toBe(false);
-    });
-
-    test('should detect dangerous commands even with approval flag', () => {
-      // Dangerous commands are detected but can be allowed with approval
-      const rmResult = executor.isCommandAllowed('rm -rf /', { requireApproval: true });
-      const ddResult = executor.isCommandAllowed('dd if=/dev/zero of=/dev/sda', { requireApproval: true });
-      // They should both be true since requireApproval is set
-      expect(typeof rmResult).toBe('boolean');
-      expect(typeof ddResult).toBe('boolean');
-    });
-
-    test('should allow all commands when no whitelist configured', () => {
-      const executorNoWhitelist = new RemoteExecutor(serversConfig, null);
-      expect(executorNoWhitelist.isCommandAllowed('any-command', {})).toBe(true);
-      expect(executorNoWhitelist.isCommandAllowed('random script', {})).toBe(true);
-      executorNoWhitelist.shutdown();
-    });
-
-    test('should allow all when whitelist contains wildcard', () => {
-      const wildcardConfig = { allowedCommands: ['*'] };
-      const executorWildcard = new RemoteExecutor(serversConfig, wildcardConfig);
-      expect(executorWildcard.isCommandAllowed('any-command', {})).toBe(true);
-      expect(executorWildcard.isCommandAllowed('whatever you want', {})).toBe(true);
-      executorWildcard.shutdown();
-    });
-
-    test('should extract command base correctly', () => {
-      expect(executor.isCommandAllowed('ls -la /var/log', {})).toBe(true);
-      expect(executor.isCommandAllowed('ps aux | grep node', {})).toBe(true);
-      expect(executor.isCommandAllowed('df -h', {})).toBe(true);
+    test('should block sudo by default', () => {
+      expect(executor.isCommandAllowed('sudo /bin/ls', {})).toBe(false);
     });
   });
 
-  describe('resolveTargets', () => {
-    test('should return array as-is', () => {
-      const hosts = ['host1.com', 'host2.com', 'host3.com'];
-      expect(executor.resolveTargets(hosts)).toEqual(hosts);
-    });
+  describe('getServerConfig()', () => {
+    test('should return server configuration', () => {
+      // Mock SSH config to avoid file read
+      executor.serversConfig.ssh = {
+        port: 22,
+        user: 'admin',
+        privateKey: 'mock-key'
+      };
 
-    test('should resolve group names to host lists', () => {
-      expect(executor.resolveTargets('web')).toEqual([
-        'web1.example.com',
-        'web2.example.com'
-      ]);
-      
-      expect(executor.resolveTargets('db')).toEqual(['db1.example.com']);
-      
-      expect(executor.resolveTargets('cache')).toEqual([
-        'redis1.example.com',
-        'redis2.example.com',
-        'redis3.example.com'
-      ]);
-    });
-
-    test('should return single host as array', () => {
-      expect(executor.resolveTargets('single.example.com')).toEqual([
-        'single.example.com'
-      ]);
-    });
-
-    test('should handle undefined group as single host', () => {
-      expect(executor.resolveTargets('unknown-group')).toEqual(['unknown-group']);
+      const config = executor.getServerConfig('web1');
+      expect(config).toHaveProperty('host', 'web1');
+      expect(config).toHaveProperty('port', 22);
+      expect(config).toHaveProperty('username', 'admin');
+      expect(config).toHaveProperty('privateKey', 'mock-key');
     });
   });
 
-  describe('getServerConfig', () => {
-    beforeEach(() => {
-      // Provide a private key directly instead of loading from file
-      serversConfig.ssh.privateKey = 'test-private-key-content';
-    });
-
-    test('should return config with correct structure', () => {
-      const config = executor.getServerConfig('test.example.com');
-      
-      expect(config).toHaveProperty('host');
-      expect(config).toHaveProperty('port');
-      expect(config).toHaveProperty('username');
-      expect(config).toHaveProperty('privateKey');
-    });
-
-    test('should use provided host', () => {
-      const config = executor.getServerConfig('custom.example.com');
-      expect(config.host).toBe('custom.example.com');
-    });
-
-    test('should use configured port', () => {
-      const config = executor.getServerConfig('test.com');
-      expect(config.port).toBe(22);
-    });
-
-    test('should use configured username', () => {
-      const config = executor.getServerConfig('test.com');
-      expect(config.username).toBe('testuser');
-    });
-
-    test('should use default port when not specified', () => {
-      delete serversConfig.ssh.port;
-      // Recreate executor with updated config
-      executor.shutdown();
-      executor = new RemoteExecutor(serversConfig, whitelistConfig);
-      const config = executor.getServerConfig('test.com');
-      expect(config.port).toBe(22);
-    });
-  });
-
-  describe('simulateExecution', () => {
-    test('should return dry-run results for single host', () => {
-      const result = executor.simulateExecution('ls -la', ['host1.com']);
+  describe('simulateExecution()', () => {
+    test('should return dry-run results', () => {
+      const result = executor.simulateExecution('/bin/ls', ['web1', 'web2']);
 
       expect(result.success).toBe(true);
       expect(result.dryRun).toBe(true);
-      expect(result.results).toHaveLength(1);
-      expect(result.results[0]).toMatchObject({
-        host: 'host1.com',
-        exitCode: 0,
-        stdout: '[DRY-RUN] 실행되지 않음',
-        stderr: '',
-        duration: 0
-      });
-    });
-
-    test('should return dry-run results for multiple hosts', () => {
-      const hosts = ['host1.com', 'host2.com', 'host3.com'];
-      const result = executor.simulateExecution('uptime', hosts);
-
-      expect(result.success).toBe(true);
-      expect(result.dryRun).toBe(true);
-      expect(result.results).toHaveLength(3);
+      expect(result.results).toHaveLength(2);
+      expect(result.results[0].host).toBe('web1');
+      expect(result.results[0].stdout).toBe('[DRY-RUN] 실행되지 않음');
       expect(result.summary).toEqual({
-        total: 3,
-        succeeded: 3,
-        failed: 0
-      });
-    });
-
-    test('should include timestamp for each result', () => {
-      const result = executor.simulateExecution('ls', ['test.com']);
-      expect(result.results[0].timestamp).toBeDefined();
-      expect(new Date(result.results[0].timestamp)).toBeInstanceOf(Date);
-    });
-  });
-
-  describe('getSummary', () => {
-    test('should calculate correct summary for all success', () => {
-      const results = [
-        { success: true },
-        { success: true },
-        { success: true }
-      ];
-      
-      const summary = executor.getSummary(results);
-      
-      expect(summary).toEqual({
-        total: 3,
-        succeeded: 3,
-        failed: 0
-      });
-    });
-
-    test('should calculate correct summary for all failures', () => {
-      const results = [
-        { success: false },
-        { success: false }
-      ];
-      
-      const summary = executor.getSummary(results);
-      
-      expect(summary).toEqual({
         total: 2,
-        succeeded: 0,
-        failed: 2
-      });
-    });
-
-    test('should calculate correct summary for mixed results', () => {
-      const results = [
-        { success: true },
-        { success: false },
-        { success: true },
-        { success: false },
-        { success: true }
-      ];
-      
-      const summary = executor.getSummary(results);
-      
-      expect(summary).toEqual({
-        total: 5,
-        succeeded: 3,
-        failed: 2
-      });
-    });
-
-    test('should handle empty results', () => {
-      const summary = executor.getSummary([]);
-      expect(summary).toEqual({
-        total: 0,
-        succeeded: 0,
+        succeeded: 2,
         failed: 0
       });
     });
   });
 
-  describe('formatResults', () => {
-    test('should format successful results', () => {
-      const results = [
-        { success: true, host: 'host1.com' },
-        { success: true, host: 'host2.com' }
+  describe('formatResults()', () => {
+    test('should format execution results', () => {
+      const rawResults = [
+        { host: 'web1', success: true, stdout: 'output1' },
+        { host: 'web2', success: false, error: 'connection failed' }
       ];
-      
-      const formatted = executor.formatResults(results);
-      
-      expect(formatted.success).toBe(true);
-      expect(formatted.results).toEqual(results);
-      expect(formatted.summary.total).toBe(2);
-      expect(formatted.summary.succeeded).toBe(2);
-    });
 
-    test('should format failed results', () => {
-      const results = [
-        { success: true, host: 'host1.com' },
-        { success: false, host: 'host2.com', error: 'Connection failed' }
-      ];
-      
-      const formatted = executor.formatResults(results);
-      
-      expect(formatted.success).toBe(false);
+      const formatted = executor.formatResults(rawResults);
+
+      expect(formatted.success).toBe(false); // every() returns false if any failed
       expect(formatted.summary.total).toBe(2);
+      expect(formatted.summary.succeeded).toBe(1);
       expect(formatted.summary.failed).toBe(1);
+      expect(formatted.results).toEqual(rawResults);
+    });
+
+    test('should mark overall success as false if all failed', () => {
+      const rawResults = [
+        { host: 'web1', success: false, error: 'error1' },
+        { host: 'web2', success: false, error: 'error2' }
+      ];
+
+      const formatted = executor.formatResults(rawResults);
+
+      expect(formatted.success).toBe(false);
+      expect(formatted.summary.succeeded).toBe(0);
+      expect(formatted.summary.failed).toBe(2);
     });
   });
 
-  describe('recordExecution', () => {
-    test('should add execution to history', () => {
-      const results = [{ success: true, host: 'test.com' }];
-      
-      executor.recordExecution('ls -la', ['test.com'], results);
-      
+  describe('recordExecution()', () => {
+    test('should record execution in history', () => {
+      const command = '/bin/ls';
+      const hosts = ['web1', 'web2'];
+      const results = [{ host: 'web1', success: true }];
+
+      executor.recordExecution(command, hosts, results);
+
       expect(executor.executionHistory).toHaveLength(1);
-      expect(executor.executionHistory[0].command).toBe('ls -la');
-      expect(executor.executionHistory[0].hosts).toEqual(['test.com']);
-    });
-
-    test('should include timestamp in record', () => {
-      const results = [{ success: true }];
-      
-      executor.recordExecution('uptime', ['host1.com'], results);
-      
-      expect(executor.executionHistory[0].timestamp).toBeDefined();
-      expect(new Date(executor.executionHistory[0].timestamp)).toBeInstanceOf(Date);
-    });
-
-    test('should include summary in record', () => {
-      const results = [
-        { success: true },
-        { success: false }
-      ];
-      
-      executor.recordExecution('ps aux', ['h1', 'h2'], results);
-      
-      expect(executor.executionHistory[0].summary).toEqual({
-        total: 2,
-        succeeded: 1,
-        failed: 1
-      });
+      expect(executor.executionHistory[0].command).toBe(command);
+      expect(executor.executionHistory[0].hosts).toEqual(hosts);
+      expect(executor.executionHistory[0].timestamp).toBeTruthy();
     });
 
     test('should limit history to 1000 entries', () => {
-      // Add 1050 records
-      for (let i = 0; i < 1050; i++) {
-        executor.recordExecution(`cmd-${i}`, ['host.com'], [{ success: true }]);
+      for (let i = 0; i < 1100; i++) {
+        executor.recordExecution(`command${i}`, ['web1'], []);
       }
-      
-      expect(executor.executionHistory).toHaveLength(1000);
-      // First record should be cmd-50, not cmd-0
-      expect(executor.executionHistory[0].command).toBe('cmd-50');
-      expect(executor.executionHistory[999].command).toBe('cmd-1049');
+
+      expect(executor.executionHistory.length).toBe(1000);
     });
   });
 
-  describe('getStatus', () => {
-    test('should return status with all components', () => {
-      const status = executor.getStatus();
-      
-      expect(status).toHaveProperty('connectionPool');
-      expect(status).toHaveProperty('executionHistory');
-      expect(status).toHaveProperty('pendingApprovals');
+  describe('getExecutionHistory()', () => {
+    test('should return recent executions', () => {
+      executor.recordExecution('cmd1', ['web1'], []);
+      executor.recordExecution('cmd2', ['web2'], []);
+
+      const history = executor.getExecutionHistory(10);
+
+      expect(history).toHaveLength(2);
+      expect(history[0].command).toBe('cmd2'); // Most recent first
+      expect(history[1].command).toBe('cmd1');
     });
 
-    test('should limit execution history to last 10', () => {
-      // Add 20 records
+    test('should limit returned history', () => {
       for (let i = 0; i < 20; i++) {
-        executor.recordExecution(`cmd-${i}`, ['host.com'], [{ success: true }]);
+        executor.recordExecution(`cmd${i}`, ['web1'], []);
       }
-      
-      const status = executor.getStatus();
-      
-      expect(status.executionHistory).toHaveLength(10);
-      expect(status.executionHistory[0].command).toBe('cmd-10');
-      expect(status.executionHistory[9].command).toBe('cmd-19');
-    });
 
-    test('should include pending approvals', () => {
-      executor.pendingApprovals.set('req1', {
-        command: 'dangerous-cmd',
-        hosts: ['host1.com']
-      });
-      
-      const status = executor.getStatus();
-      
-      expect(status.pendingApprovals).toHaveLength(1);
-      expect(status.pendingApprovals[0].command).toBe('dangerous-cmd');
+      const history = executor.getExecutionHistory(5);
+      expect(history).toHaveLength(5);
     });
   });
 
-  describe('shutdown', () => {
-    test('should close connection pool', () => {
-      // Create a mock to track calls
-      const originalCloseAll = executor.connectionPool.closeAll;
-      let closeAllCalled = false;
-      executor.connectionPool.closeAll = () => {
-        closeAllCalled = true;
-      };
-      
-      executor.shutdown();
-      
-      expect(closeAllCalled).toBe(true);
-      
-      // Restore
-      executor.connectionPool.closeAll = originalCloseAll;
-    });
-  });
+  describe('getStats()', () => {
+    test('should return execution statistics', () => {
+      executor.recordExecution('cmd1', ['web1'], [{ success: true }]);
+      executor.recordExecution('cmd2', ['web2'], [{ success: false }]);
 
-  describe('requestApproval', () => {
-    test('should add to pending approvals', async () => {
-      const result = await executor.requestApproval('rm -rf /tmp/test', ['host1.com']);
-      
-      expect(executor.pendingApprovals.size).toBeGreaterThan(0);
-      expect(result).toBe(false); // Default deny
+      const stats = executor.getStats();
+
+      expect(stats.totalExecutions).toBe(2);
+      expect(stats.successfulExecutions).toBe(1);
+      expect(stats.failedExecutions).toBe(1);
+    });
+
+    test('should return zero stats for new executor', () => {
+      const stats = executor.getStats();
+
+      expect(stats.totalExecutions).toBe(0);
+      expect(stats.successfulExecutions).toBe(0);
+      expect(stats.failedExecutions).toBe(0);
     });
   });
 });

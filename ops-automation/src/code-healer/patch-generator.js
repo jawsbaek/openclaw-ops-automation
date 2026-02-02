@@ -17,7 +17,7 @@ class PatchGenerator {
    * 진단 결과 기반 패치 생성
    */
   async generatePatch(issue) {
-    const { type, component, evidence, affectedFiles } = issue;
+    const { type, evidence, affectedFiles } = issue;
 
     logger.info(`패치 생성 시작: ${type} in ${affectedFiles.join(', ')}`);
 
@@ -128,7 +128,7 @@ class PatchGenerator {
    * 패턴 적용
    */
   applyPattern(lines, location, pattern) {
-    const { lineNumber, detector } = location;
+    const { lineNumber } = location;
     const fix = pattern.fix;
 
     switch (fix.type) {
