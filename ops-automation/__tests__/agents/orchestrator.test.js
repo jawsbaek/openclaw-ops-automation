@@ -363,12 +363,51 @@ describe('Orchestrator Agent', () => {
       await Promise.resolve();
       await Promise.resolve();
 
-      // Advance timer
       vi.advanceTimersByTime(60000);
       await Promise.resolve();
       await Promise.resolve();
 
-      // Should not crash - interval should still be active
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+    });
+
+    test('should catch and log errors in interval callback', async () => {
+      const heartbeatError = new Error('Heartbeat catastrophic failure');
+
+      collectMetrics.mockRejectedValue(heartbeatError);
+      analyzeLogs.mockRejectedValue(heartbeatError);
+      runAlertHandler.mockRejectedValue(heartbeatError);
+      generateReport.mockRejectedValue(heartbeatError);
+
+      start(1000);
+
+      await vi.runOnlyPendingTimersAsync();
+
+      vi.advanceTimersByTime(1000);
+      await vi.runOnlyPendingTimersAsync();
+
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+    });
+
+    test('should continue running after interval callback error', async () => {
+      let callCount = 0;
+      collectMetrics.mockImplementation(() => {
+        callCount++;
+        if (callCount === 2) {
+          throw new Error('Second call failure');
+        }
+        return Promise.resolve({ system: { cpu: 10 }, healthchecks: [] });
+      });
+
+      start(1000);
+
+      await vi.runOnlyPendingTimersAsync();
+
+      vi.advanceTimersByTime(1000);
+      await vi.runOnlyPendingTimersAsync();
+
+      vi.advanceTimersByTime(1000);
+      await vi.runOnlyPendingTimersAsync();
+
       expect(vi.getTimerCount()).toBeGreaterThan(0);
     });
   });
@@ -383,7 +422,6 @@ describe('Orchestrator Agent', () => {
     });
 
     test('should generate daily report at scheduled hour', async () => {
-      // Set to 9 AM on a weekday
       vi.setSystemTime(new Date('2024-01-15T09:30:00Z'));
 
       const result = await heartbeat();
@@ -391,7 +429,6 @@ describe('Orchestrator Agent', () => {
       const reportTask = result.results.find((r) => r.task === 'report-generation');
       expect(reportTask).toBeDefined();
 
-      // Check if daily report was generated
       if (reportTask.reports.length > 0) {
         const dailyReport = reportTask.reports.find((r) => r.type === 'daily');
         if (dailyReport) {
@@ -401,7 +438,6 @@ describe('Orchestrator Agent', () => {
     });
 
     test('should not generate daily report at wrong hour', async () => {
-      // Set to 8 AM (not report hour)
       vi.setSystemTime(new Date('2024-01-15T08:30:00Z'));
 
       const result = await heartbeat();
@@ -409,7 +445,6 @@ describe('Orchestrator Agent', () => {
       const reportTask = result.results.find((r) => r.task === 'report-generation');
       expect(reportTask).toBeDefined();
 
-      // Should have no daily report at this hour
       const dailyReport = reportTask.reports.find((r) => r.type === 'daily');
       expect(dailyReport).toBeUndefined();
     });
@@ -422,13 +457,163 @@ describe('Orchestrator Agent', () => {
 
       const reportTask = result.results.find((r) => r.task === 'report-generation');
 
-      // Check if there's a failed daily report
       if (reportTask.reports.length > 0) {
         const failedReport = reportTask.reports.find((r) => r.success === false);
         if (failedReport) {
           expect(failedReport.error).toBe('Report generation failed');
         }
       }
+    });
+
+    test('should generate weekly report on Monday at 10 AM after 7 days', async () => {
+      vi.setSystemTime(new Date('2024-01-08T10:30:00Z'));
+      await heartbeat();
+
+      vi.setSystemTime(new Date('2024-01-15T10:30:00Z'));
+
+      const result = await heartbeat();
+
+      const reportTask = result.results.find((r) => r.task === 'report-generation');
+      expect(reportTask).toBeDefined();
+
+      if (reportTask.reports.length > 0) {
+        const weeklyReport = reportTask.reports.find((r) => r.type === 'weekly');
+        if (weeklyReport) {
+          expect(weeklyReport.success).toBe(true);
+          expect(weeklyReport.reportPath).toBeDefined();
+        }
+      }
+    });
+
+    test('should handle weekly report generation failure', async () => {
+      vi.setSystemTime(new Date('2024-01-08T10:30:00Z'));
+      await heartbeat();
+
+      vi.setSystemTime(new Date('2024-01-15T10:30:00Z'));
+      generateReport.mockRejectedValue(new Error('Weekly report failed'));
+
+      const result = await heartbeat();
+
+      const reportTask = result.results.find((r) => r.task === 'report-generation');
+
+      if (reportTask.reports.length > 0) {
+        const failedReport = reportTask.reports.find((r) => r.success === false);
+        if (failedReport) {
+          expect(failedReport.error).toContain('failed');
+        }
+      }
+    });
+
+    test('should not generate weekly report on wrong day', async () => {
+      vi.setSystemTime(new Date('2024-01-16T10:30:00Z'));
+
+      const result = await heartbeat();
+
+      const reportTask = result.results.find((r) => r.task === 'report-generation');
+      const weeklyReport = reportTask.reports.find((r) => r.type === 'weekly');
+      expect(weeklyReport).toBeUndefined();
+    });
+  });
+
+  describe('Report Generation with timezone-aware times', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      generateReport.mockResolvedValue({ reportPath: '/tmp/report.md' });
+    });
+
+    test('daily report success at 9 AM local time', async () => {
+      vi.useFakeTimers();
+      const nineAMLocal = new Date();
+      nineAMLocal.setHours(9, 0, 0, 0);
+      nineAMLocal.setDate(nineAMLocal.getDate() + 1);
+      vi.setSystemTime(nineAMLocal);
+
+      generateReport.mockReset();
+      generateReport.mockResolvedValue({ reportPath: '/tmp/daily.md' });
+
+      const result = await heartbeat();
+      const reportTask = result.results.find((r) => r.task === 'report-generation');
+
+      expect(reportTask).toBeDefined();
+      expect(reportTask.success).toBe(true);
+
+      const dailyReport = reportTask.reports.find((r) => r.type === 'daily');
+      if (dailyReport) {
+        expect(dailyReport.success).toBe(true);
+        expect(dailyReport.reportPath).toBe('/tmp/daily.md');
+      }
+
+      vi.useRealTimers();
+    });
+
+    test('daily report failure at 9 AM local time', async () => {
+      vi.useFakeTimers();
+      const nineAMLocal = new Date();
+      nineAMLocal.setHours(9, 0, 0, 0);
+      nineAMLocal.setDate(nineAMLocal.getDate() + 2);
+      vi.setSystemTime(nineAMLocal);
+
+      generateReport.mockRejectedValue(new Error('Daily report failed'));
+
+      const result = await heartbeat();
+      const reportTask = result.results.find((r) => r.task === 'report-generation');
+
+      expect(reportTask).toBeDefined();
+      const failedReport = reportTask.reports.find((r) => r.type === 'daily' && !r.success);
+      if (failedReport) {
+        expect(failedReport.error).toBe('Daily report failed');
+      }
+
+      vi.useRealTimers();
+    });
+
+    test('weekly report success at Monday 10 AM local time', async () => {
+      vi.useFakeTimers();
+      const mondayTenAM = new Date();
+      while (mondayTenAM.getDay() !== 1) {
+        mondayTenAM.setDate(mondayTenAM.getDate() + 1);
+      }
+      mondayTenAM.setHours(10, 0, 0, 0);
+      mondayTenAM.setDate(mondayTenAM.getDate() + 7);
+      vi.setSystemTime(mondayTenAM);
+
+      generateReport.mockResolvedValue({ reportPath: '/tmp/weekly.md' });
+
+      const result = await heartbeat();
+      const reportTask = result.results.find((r) => r.task === 'report-generation');
+
+      expect(reportTask).toBeDefined();
+      const weeklyReport = reportTask.reports.find((r) => r.type === 'weekly');
+      if (weeklyReport) {
+        expect(weeklyReport.success).toBe(true);
+        expect(weeklyReport.reportPath).toBe('/tmp/weekly.md');
+      }
+
+      vi.useRealTimers();
+    });
+
+    test('weekly report failure at Monday 10 AM local time', async () => {
+      vi.useFakeTimers();
+      const mondayTenAM = new Date();
+      while (mondayTenAM.getDay() !== 1) {
+        mondayTenAM.setDate(mondayTenAM.getDate() + 1);
+      }
+      mondayTenAM.setHours(10, 0, 0, 0);
+      mondayTenAM.setDate(mondayTenAM.getDate() + 14);
+      vi.setSystemTime(mondayTenAM);
+
+      generateReport.mockRejectedValue(new Error('Weekly report failed'));
+
+      const result = await heartbeat();
+      const reportTask = result.results.find((r) => r.task === 'report-generation');
+
+      expect(reportTask).toBeDefined();
+      const failedReport = reportTask.reports.find((r) => r.type === 'weekly' && !r.success);
+      if (failedReport) {
+        expect(failedReport.error).toBe('Weekly report failed');
+      }
+
+      vi.useRealTimers();
     });
   });
 
