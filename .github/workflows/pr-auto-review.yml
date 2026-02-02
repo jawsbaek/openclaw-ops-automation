@@ -17,9 +17,9 @@ jobs:
     name: Code Quality Checks
     runs-on: ubuntu-latest
     outputs:
-      eslint-passed: ${{ steps.eslint.conclusion == 'success' }}
-      tests-passed: ${{ steps.tests.conclusion == 'success' }}
-      coverage-passed: ${{ steps.coverage.conclusion == 'success' }}
+      eslint-passed: ${{ steps.eslint.outcome == 'success' }}
+      tests-passed: ${{ steps.tests.outcome == 'success' }}
+      coverage-passed: ${{ steps.coverage.outcome == 'success' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -99,9 +99,9 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-latest
     outputs:
-      audit-passed: ${{ steps.audit.conclusion == 'success' }}
-      secrets-passed: ${{ steps.secrets.conclusion == 'success' }}
-      injection-passed: ${{ steps.injection.conclusion == 'success' }}
+      audit-passed: ${{ steps.audit.outcome == 'success' }}
+      secrets-passed: ${{ steps.secrets.outcome == 'success' }}
+      injection-passed: ${{ steps.injection.outcome == 'success' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
