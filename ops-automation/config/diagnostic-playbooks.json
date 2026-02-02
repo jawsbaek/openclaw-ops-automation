@@ -1,0 +1,252 @@
+{
+  "playbooks": {
+    "high_memory": {
+      "name": "높은 메모리 사용률 진단",
+      "triggers": ["high_memory_usage", "memory_alert"],
+      "steps": [
+        {
+          "name": "전체 메모리 확인",
+          "command": "free -m",
+          "timeout": 5000,
+          "parser": "memory_stats"
+        },
+        {
+          "name": "프로세스별 메모리",
+          "command": "ps aux --sort=-rss | head -20",
+          "timeout": 5000,
+          "parser": "process_list"
+        },
+        {
+          "name": "메모리 맵",
+          "command": "cat /proc/meminfo",
+          "timeout": 5000,
+          "parser": "meminfo"
+        },
+        {
+          "name": "스왑 사용",
+          "command": "swapon -s",
+          "timeout": 5000,
+          "parser": "swap_info"
+        },
+        {
+          "name": "OOM 킬러 로그",
+          "command": "journalctl -k | grep -i 'killed process' | tail -20",
+          "timeout": 10000,
+          "parser": "oom_logs"
+        }
+      ],
+      "analysis": {
+        "memory_leak_threshold": 0.90,
+        "process_memory_threshold": 0.50
+      }
+    },
+    "high_cpu": {
+      "name": "높은 CPU 사용률 진단",
+      "triggers": ["high_cpu_usage", "cpu_alert"],
+      "steps": [
+        {
+          "name": "CPU 사용률",
+          "command": "top -bn1 | head -20",
+          "timeout": 5000,
+          "parser": "top_output"
+        },
+        {
+          "name": "로드 평균",
+          "command": "uptime",
+          "timeout": 5000,
+          "parser": "load_average"
+        },
+        {
+          "name": "프로세스별 CPU",
+          "command": "ps aux --sort=-pcpu | head -20",
+          "timeout": 5000,
+          "parser": "process_list"
+        },
+        {
+          "name": "Context Switching",
+          "command": "vmstat 1 5",
+          "timeout": 10000,
+          "parser": "vmstat_output"
+        }
+      ]
+    },
+    "disk_full": {
+      "name": "디스크 공간 부족 진단",
+      "triggers": ["high_disk_usage", "disk_alert"],
+      "steps": [
+        {
+          "name": "디스크 사용량",
+          "command": "df -h",
+          "timeout": 5000,
+          "parser": "disk_usage"
+        },
+        {
+          "name": "Inode 사용률",
+          "command": "df -i",
+          "timeout": 5000,
+          "parser": "inode_usage"
+        },
+        {
+          "name": "큰 디렉토리 찾기",
+          "command": "du -sh /* 2>/dev/null | sort -hr | head -20",
+          "timeout": 30000,
+          "parser": "directory_sizes"
+        },
+        {
+          "name": "큰 파일 찾기",
+          "command": "find /var/log -type f -size +100M -exec ls -lh {} \\; 2>/dev/null",
+          "timeout": 30000,
+          "parser": "large_files"
+        },
+        {
+          "name": "로그 파일 크기",
+          "command": "du -sh /var/log/* 2>/dev/null | sort -hr | head -10",
+          "timeout": 10000,
+          "parser": "log_sizes"
+        }
+      ]
+    },
+    "network_issue": {
+      "name": "네트워크 연결 문제 진단",
+      "triggers": ["network_error", "connection_failed"],
+      "steps": [
+        {
+          "name": "네트워크 인터페이스",
+          "command": "ip addr show",
+          "timeout": 5000,
+          "parser": "network_interfaces"
+        },
+        {
+          "name": "리스닝 포트",
+          "command": "ss -tuln",
+          "timeout": 5000,
+          "parser": "listening_ports"
+        },
+        {
+          "name": "활성 연결",
+          "command": "ss -s",
+          "timeout": 5000,
+          "parser": "connection_stats"
+        },
+        {
+          "name": "네트워크 에러",
+          "command": "netstat -i",
+          "timeout": 5000,
+          "parser": "network_errors"
+        },
+        {
+          "name": "DNS 테스트",
+          "command": "nslookup google.com",
+          "timeout": 10000,
+          "parser": "dns_result"
+        }
+      ]
+    },
+    "application_error": {
+      "name": "애플리케이션 오류 진단",
+      "triggers": ["app_error", "service_down", "api_error"],
+      "steps": [
+        {
+          "name": "서비스 상태",
+          "command": "systemctl status {service_name}",
+          "timeout": 5000,
+          "parser": "service_status",
+          "dynamic": true
+        },
+        {
+          "name": "Docker 컨테이너",
+          "command": "docker ps -a",
+          "timeout": 5000,
+          "parser": "docker_containers"
+        },
+        {
+          "name": "애플리케이션 로그",
+          "command": "tail -n 500 /var/log/{app_log}",
+          "timeout": 10000,
+          "parser": "app_logs",
+          "dynamic": true
+        },
+        {
+          "name": "에러 패턴 검색",
+          "command": "grep -i 'error\\|exception\\|fatal' /var/log/{app_log} | tail -50",
+          "timeout": 10000,
+          "parser": "error_patterns",
+          "dynamic": true
+        }
+      ]
+    },
+    "database_slowdown": {
+      "name": "데이터베이스 성능 저하 진단",
+      "triggers": ["db_slow", "query_timeout"],
+      "steps": [
+        {
+          "name": "데이터베이스 프로세스",
+          "command": "ps aux | grep -E 'postgres|mysql|mongo'",
+          "timeout": 5000,
+          "parser": "db_processes"
+        },
+        {
+          "name": "데이터베이스 연결 수",
+          "command": "ss -tan | grep :5432 | wc -l",
+          "timeout": 5000,
+          "parser": "connection_count"
+        },
+        {
+          "name": "디스크 I/O",
+          "command": "iostat -x 1 5",
+          "timeout": 10000,
+          "parser": "io_stats"
+        }
+      ]
+    },
+    "memory_leak": {
+      "name": "메모리 누수 탐지",
+      "triggers": ["suspected_memory_leak"],
+      "steps": [
+        {
+          "name": "프로세스 메모리 트렌드",
+          "command": "ps -eo pid,comm,rss --sort=-rss | head -10",
+          "timeout": 5000,
+          "parser": "process_memory"
+        },
+        {
+          "name": "힙 덤프 (Node.js)",
+          "command": "kill -USR2 {nodejs_pid}",
+          "timeout": 5000,
+          "requireApproval": true,
+          "dynamic": true
+        },
+        {
+          "name": "GC 로그 확인",
+          "command": "grep -i 'gc' /var/log/app.log | tail -100",
+          "timeout": 10000,
+          "parser": "gc_logs"
+        }
+      ]
+    }
+  },
+  "parsers": {
+    "memory_stats": {
+      "type": "regex",
+      "patterns": {
+        "total": "Mem:\\s+(\\d+)",
+        "used": "Mem:\\s+\\d+\\s+(\\d+)",
+        "available": "Mem:\\s+\\d+\\s+\\d+\\s+\\d+\\s+\\d+\\s+\\d+\\s+(\\d+)"
+      }
+    },
+    "process_list": {
+      "type": "table",
+      "headers": ["USER", "PID", "%CPU", "%MEM", "VSZ", "RSS", "TTY", "STAT", "START", "TIME", "COMMAND"]
+    },
+    "disk_usage": {
+      "type": "table",
+      "headers": ["Filesystem", "Size", "Used", "Avail", "Use%", "Mounted"]
+    }
+  },
+  "settings": {
+    "maxPlaybookDuration": 300000,
+    "maxLogSize": 104857600,
+    "parallelExecution": true,
+    "retryFailedSteps": false
+  }
+}
