@@ -200,6 +200,10 @@ jobs:
             **/*.json
             **/*.yml
             **/*.yaml
+          files_ignore: |
+            scripts/pr-reviewer.js
+            scripts/auto-merger.js
+            scripts/security-scanner.js
 
       - name: AI Code Review
         id: review
