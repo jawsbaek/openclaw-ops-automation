@@ -529,4 +529,466 @@ Inter-|   Receive                                                |  Transmit
       expect(retrieved).toEqual(profile);
     });
   });
+
+  describe('getStatus', () => {
+    test('should return profile count and targets', () => {
+      profiler.profiles.set('host1', { target: 'host1' });
+      profiler.profiles.set('host2', { target: 'host2' });
+
+      const status = profiler.getStatus();
+
+      expect(status.profileCount).toBe(2);
+      expect(status.targets).toContain('host1');
+      expect(status.targets).toContain('host2');
+    });
+
+    test('should return empty targets for new profiler', () => {
+      const status = profiler.getStatus();
+
+      expect(status.profileCount).toBe(0);
+      expect(status.targets).toEqual([]);
+    });
+  });
+
+  describe('profileSystem', () => {
+    test('should profile all system components', async () => {
+      mockSSHExecutor.execute = () =>
+        Promise.resolve({
+          success: true,
+          results: [{ stdout: '%Cpu(s): 20.0 us, 5.0 sy, 0.0 ni, 75.0 id' }]
+        });
+
+      const result = await profiler.profileSystem('test-host', 1000);
+
+      expect(result).toHaveProperty('target', 'test-host');
+      expect(result).toHaveProperty('timestamp');
+      expect(result).toHaveProperty('duration', 1000);
+      expect(result).toHaveProperty('cpu');
+      expect(result).toHaveProperty('memory');
+      expect(result).toHaveProperty('disk');
+      expect(result).toHaveProperty('network');
+      expect(result).toHaveProperty('bottlenecks');
+    });
+
+    test('should store result in profiles map', async () => {
+      mockSSHExecutor.execute = () => Promise.resolve({ success: true, results: [{ stdout: '' }] });
+
+      await profiler.profileSystem('test-host', 1000);
+
+      expect(profiler.profiles.has('test-host')).toBe(true);
+    });
+  });
+
+  describe('profileCPU', () => {
+    test('should collect CPU metrics', async () => {
+      mockSSHExecutor.execute = ({ command }) => {
+        if (command.includes('top')) {
+          return Promise.resolve({
+            success: true,
+            results: [{ stdout: '%Cpu(s): 30.0 us, 10.0 sy, 0.0 ni, 60.0 id' }]
+          });
+        }
+        if (command.includes('uptime')) {
+          return Promise.resolve({
+            success: true,
+            results: [{ stdout: 'load average: 2.5, 1.8, 1.2' }]
+          });
+        }
+        return Promise.resolve({ success: true, results: [{ stdout: '' }] });
+      };
+
+      const result = await profiler.profileCPU('test-host', 5000);
+
+      expect(result).toHaveProperty('usage');
+      expect(result).toHaveProperty('loadAverage');
+    });
+
+    test('should handle SSH execution errors gracefully', async () => {
+      mockSSHExecutor.execute = () => Promise.reject(new Error('SSH failed'));
+
+      const result = await profiler.profileCPU('test-host', 5000);
+
+      expect(result.usage).toBeNull();
+      expect(result.topProcesses).toBeNull();
+    });
+
+    test('should handle unsuccessful SSH result', async () => {
+      mockSSHExecutor.execute = () => Promise.resolve({ success: false, results: [{ stdout: '' }] });
+
+      const result = await profiler.profileCPU('test-host', 5000);
+
+      expect(result.usage).toBeUndefined();
+    });
+  });
+
+  describe('profileMemory', () => {
+    test('should collect memory metrics', async () => {
+      mockSSHExecutor.execute = ({ command }) => {
+        if (command.includes('free')) {
+          return Promise.resolve({
+            success: true,
+            results: [{ stdout: 'Mem: 16000 8000 4000 200 3800 7000' }]
+          });
+        }
+        return Promise.resolve({ success: true, results: [{ stdout: '' }] });
+      };
+
+      const result = await profiler.profileMemory('test-host');
+
+      expect(result).toHaveProperty('summary');
+      expect(result).toHaveProperty('topProcesses');
+      expect(result).toHaveProperty('details');
+      expect(result).toHaveProperty('swap');
+    });
+
+    test('should handle SSH execution errors gracefully', async () => {
+      mockSSHExecutor.execute = () => Promise.reject(new Error('SSH failed'));
+
+      const result = await profiler.profileMemory('test-host');
+
+      expect(result.summary).toBeNull();
+    });
+  });
+
+  describe('profileDisk', () => {
+    test('should collect disk metrics', async () => {
+      mockSSHExecutor.execute = ({ command }) => {
+        if (command.includes('df -h')) {
+          return Promise.resolve({
+            success: true,
+            results: [{ stdout: 'Filesystem Size Used Avail Use% Mounted\n/dev/sda1 100G 50G 50G 50% /' }]
+          });
+        }
+        return Promise.resolve({ success: true, results: [{ stdout: '' }] });
+      };
+
+      const result = await profiler.profileDisk('test-host');
+
+      expect(result).toHaveProperty('usage');
+      expect(result).toHaveProperty('inodes');
+      expect(result).toHaveProperty('io');
+      expect(result).toHaveProperty('largestDirs');
+    });
+
+    test('should handle SSH execution errors gracefully', async () => {
+      mockSSHExecutor.execute = () => Promise.reject(new Error('SSH failed'));
+
+      const result = await profiler.profileDisk('test-host');
+
+      expect(result.usage).toBeNull();
+    });
+  });
+
+  describe('profileNetwork', () => {
+    test('should collect network metrics', async () => {
+      mockSSHExecutor.execute = ({ command }) => {
+        if (command.includes('ss -tuln')) {
+          return Promise.resolve({ success: true, results: [{ stdout: '50' }] });
+        }
+        if (command.includes('ESTAB')) {
+          return Promise.resolve({ success: true, results: [{ stdout: '100' }] });
+        }
+        return Promise.resolve({ success: true, results: [{ stdout: '' }] });
+      };
+
+      const result = await profiler.profileNetwork('test-host');
+
+      expect(result).toHaveProperty('interfaces');
+      expect(result).toHaveProperty('connectionStats');
+      expect(result).toHaveProperty('listeningPorts');
+      expect(result).toHaveProperty('establishedConnections');
+      expect(result).toHaveProperty('errors');
+    });
+
+    test('should handle SSH execution errors gracefully', async () => {
+      mockSSHExecutor.execute = () => Promise.reject(new Error('SSH failed'));
+
+      const result = await profiler.profileNetwork('test-host');
+
+      expect(result.interfaces).toBeNull();
+    });
+  });
+
+  describe('profileProcess', () => {
+    test('should profile specific process by PID', async () => {
+      mockSSHExecutor.execute = () =>
+        Promise.resolve({
+          success: true,
+          results: [{ stdout: 'process details' }]
+        });
+
+      const result = await profiler.profileProcess('test-host', 1234);
+
+      expect(result).toHaveProperty('pid', 1234);
+      expect(result).toHaveProperty('target', 'test-host');
+      expect(result).toHaveProperty('timestamp');
+      expect(result).toHaveProperty('details');
+    });
+
+    test('should handle SSH execution errors gracefully', async () => {
+      mockSSHExecutor.execute = () => Promise.reject(new Error('SSH failed'));
+
+      const result = await profiler.profileProcess('test-host', 1234);
+
+      expect(result.pid).toBe(1234);
+      expect(result.details).toBeNull();
+    });
+
+    test('should handle unsuccessful SSH result', async () => {
+      mockSSHExecutor.execute = () => Promise.resolve({ success: false, results: [{ stdout: '' }] });
+
+      const result = await profiler.profileProcess('test-host', 1234);
+
+      expect(result.details).toBeUndefined();
+    });
+  });
+
+  describe('identifyBottlenecks - network', () => {
+    test('should identify network bottleneck with high connections', () => {
+      const metrics = {
+        cpu: { usage: { usage: 40 } },
+        memory: { summary: { usagePercent: 50 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 15000 }
+      };
+
+      const bottlenecks = profiler.identifyBottlenecks(metrics);
+
+      expect(bottlenecks).toContainEqual(
+        expect.objectContaining({
+          type: 'network',
+          severity: 'medium'
+        })
+      );
+    });
+  });
+
+  describe('parseCPUData - processes', () => {
+    test('should parse process list from ps output', () => {
+      const output = `USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.5  0.1 169876 12836 ?        Ss   Jan01   5:00 /sbin/init
+www-data  1234 25.0  5.2 500000 54000 ?        Sl   10:00   1:00 /usr/bin/node app.js`;
+
+      const parsed = profiler.parseCPUData('processes', output);
+
+      expect(parsed).toBeInstanceOf(Array);
+      expect(parsed.length).toBe(2);
+      expect(parsed[1]).toHaveProperty('user', 'www-data');
+      expect(parsed[1]).toHaveProperty('pid', '1234');
+      expect(parsed[1]).toHaveProperty('cpu', 25.0);
+    });
+
+    test('should filter out invalid process lines', () => {
+      const output = `USER PID %CPU %MEM VSZ RSS TTY STAT START TIME COMMAND
+short line`;
+
+      const parsed = profiler.parseCPUData('processes', output);
+
+      expect(parsed).toBeInstanceOf(Array);
+      expect(parsed.length).toBe(0);
+    });
+
+    test('should return raw output for context type', () => {
+      const output = 'some vmstat output';
+      const parsed = profiler.parseCPUData('context', output);
+
+      expect(parsed).toBe(output);
+    });
+  });
+
+  describe('parseMemoryData - processes', () => {
+    test('should parse memory process list', () => {
+      const output = `USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+mysql     2345  1.0 15.0 800000 150000 ?        Sl   Jan01  10:00 /usr/sbin/mysqld`;
+
+      const parsed = profiler.parseMemoryData('processes', output);
+
+      expect(parsed).toBeInstanceOf(Array);
+      expect(parsed[0]).toHaveProperty('user', 'mysql');
+      expect(parsed[0]).toHaveProperty('mem', 15.0);
+      expect(parsed[0]).toHaveProperty('rss', 150000);
+    });
+
+    test('should return raw output for meminfo type', () => {
+      const output = 'MemTotal: 16000 kB';
+      const parsed = profiler.parseMemoryData('meminfo', output);
+
+      expect(parsed).toBe(output);
+    });
+  });
+
+  describe('parseDiskData - raw output', () => {
+    test('should return raw output for io type', () => {
+      const output = 'iostat output data';
+      const parsed = profiler.parseDiskData('io', output);
+
+      expect(parsed).toBe(output);
+    });
+
+    test('should parse inode data same as usage', () => {
+      const output = `Filesystem Inodes IUsed IFree IUse% Mounted
+/dev/sda1 1000000 500000 500000 50% /`;
+
+      const parsed = profiler.parseDiskData('inodes', output);
+
+      expect(parsed).toBeInstanceOf(Array);
+      expect(parsed[0]).toHaveProperty('mountPoint', '/');
+    });
+  });
+
+  describe('generateRecommendations - additional cases', () => {
+    test('should recommend for high load average', () => {
+      const profile = {
+        target: 'test-host',
+        cpu: { usage: { usage: 50 }, loadAverage: { '1min': 5.0, '5min': 4.0 } },
+        memory: { summary: { usagePercent: 50 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
+
+      const result = profiler.generateRecommendations(profile);
+
+      expect(result.recommendations.some((r) => r.issue.includes('load average'))).toBe(true);
+    });
+
+    test('should recommend for high memory single process', () => {
+      const profile = {
+        target: 'test-host',
+        cpu: { usage: { usage: 50 } },
+        memory: {
+          summary: { usagePercent: 50 },
+          topProcesses: [{ user: 'root', pid: '1234', mem: 35, command: 'java -jar app.jar' }]
+        },
+        disk: { usage: [] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
+
+      const result = profiler.generateRecommendations(profile);
+
+      expect(result.recommendations.some((r) => r.category === 'memory' && r.severity === 'medium')).toBe(true);
+    });
+
+    test('should recommend for critical memory usage', () => {
+      const profile = {
+        target: 'test-host',
+        cpu: { usage: { usage: 50 } },
+        memory: { summary: { usagePercent: 92 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
+
+      const result = profiler.generateRecommendations(profile);
+
+      expect(result.critical).toBeGreaterThan(0);
+      expect(result.recommendations.some((r) => r.category === 'memory' && r.severity === 'critical')).toBe(true);
+    });
+
+    test('should recommend for critical disk usage', () => {
+      const profile = {
+        target: 'test-host',
+        cpu: { usage: { usage: 50 } },
+        memory: { summary: { usagePercent: 50 } },
+        disk: { usage: [{ mountPoint: '/', usePercent: '97%' }] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
+
+      const result = profiler.generateRecommendations(profile);
+
+      expect(result.recommendations.some((r) => r.category === 'disk' && r.severity === 'critical')).toBe(true);
+    });
+
+    test('should recommend for critical network connections', () => {
+      const profile = {
+        target: 'test-host',
+        cpu: { usage: { usage: 50 } },
+        memory: { summary: { usagePercent: 50 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 60000 },
+        bottlenecks: []
+      };
+
+      const result = profiler.generateRecommendations(profile);
+
+      expect(result.recommendations.some((r) => r.category === 'network' && r.severity === 'critical')).toBe(true);
+    });
+
+    test('should recommend for medium network connections', () => {
+      const profile = {
+        target: 'test-host',
+        cpu: { usage: { usage: 50 } },
+        memory: { summary: { usagePercent: 50 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 25000 },
+        bottlenecks: []
+      };
+
+      const result = profiler.generateRecommendations(profile);
+
+      expect(result.recommendations.some((r) => r.category === 'network' && r.severity === 'medium')).toBe(true);
+    });
+  });
+
+  describe('compareProfiles - network changes', () => {
+    test('should compare network connection changes', () => {
+      const profile1 = {
+        target: 'test-host',
+        timestamp: '2026-02-02T00:00:00Z',
+        cpu: { usage: { usage: 40 } },
+        memory: { summary: { usagePercent: 50, used: 4000 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 1000 },
+        bottlenecks: []
+      };
+
+      const profile2 = {
+        target: 'test-host',
+        timestamp: '2026-02-02T01:00:00Z',
+        cpu: { usage: { usage: 45 } },
+        memory: { summary: { usagePercent: 55, used: 4500 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 1500 },
+        bottlenecks: []
+      };
+
+      const comparison = profiler.compareProfiles(profile1, profile2);
+
+      expect(comparison.changes).toHaveProperty('network');
+      expect(comparison.changes.network.connections.before).toBe(1000);
+      expect(comparison.changes.network.connections.after).toBe(1500);
+      expect(comparison.changes.network.connections.delta).toBe(500);
+    });
+  });
+
+  describe('compareProfiles - new bottlenecks', () => {
+    test('should detect new bottlenecks', () => {
+      const profile1 = {
+        target: 'test-host',
+        timestamp: '2026-02-02T00:00:00Z',
+        cpu: { usage: { usage: 40 } },
+        memory: { summary: { usagePercent: 50, used: 4000 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 100 },
+        bottlenecks: []
+      };
+
+      const profile2 = {
+        target: 'test-host',
+        timestamp: '2026-02-02T01:00:00Z',
+        cpu: { usage: { usage: 90 } },
+        memory: { summary: { usagePercent: 50, used: 4000 } },
+        disk: { usage: [] },
+        network: { establishedConnections: 100 },
+        bottlenecks: [{ type: 'cpu', severity: 'high' }]
+      };
+
+      const comparison = profiler.compareProfiles(profile1, profile2);
+
+      expect(comparison.bottleneckChanges.new.length).toBe(1);
+      expect(comparison.bottleneckChanges.new[0].type).toBe('cpu');
+    });
+  });
 });
