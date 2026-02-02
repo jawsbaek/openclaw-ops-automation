@@ -18,6 +18,16 @@ const DeployManager = require('../src/code-healer/deploy-manager');
 const serversConfig = require('../config/servers.json');
 const whitelistConfig = require('../config/ssh-whitelist.json');
 
+// Constants
+const API_RESPONSE_TIME_ALERT_VALUE = 5000; // 5초
+const API_RESPONSE_TIME_THRESHOLD = 500;
+const DEPLOYMENT_WAIT_TIME_MS = 5000;
+const PRE_DEPLOY_ACTIVE_CONNECTIONS = 495;
+const PRE_DEPLOY_RESPONSE_TIME = 5000;
+const POST_DEPLOY_ACTIVE_CONNECTIONS = 45;
+const POST_DEPLOY_RESPONSE_TIME = 250;
+const DEFAULT_DEPLOY_STAGES = 5;
+
 /**
  * Detects API delay alert
  * @returns {Object} Alert information
@@ -28,8 +38,8 @@ function detectApiDelay() {
     type: 'api_slow_response',
     severity: 'critical',
     metric: 'response_time',
-    value: 5000, // 5초
-    threshold: 500
+    value: API_RESPONSE_TIME_ALERT_VALUE,
+    threshold: API_RESPONSE_TIME_THRESHOLD
   };
   console.log('응답 시간:', `${alert.value}ms (임계값: ${alert.threshold}ms)`);
   return alert;
@@ -159,7 +169,7 @@ async function performDryRunTest(deployManager, patch) {
   });
 
   console.log('[DRY-RUN] 배포 시뮬레이션 완료');
-  console.log('예상 배포 단계:', dryRunResult.stages?.length || 5);
+  console.log('예상 배포 단계:', dryRunResult.stages?.length || DEFAULT_DEPLOY_STAGES);
 
   return dryRunResult;
 }
@@ -204,16 +214,16 @@ async function handleDeploymentApproval(deployManager, patch) {
 async function verifyDeployment() {
   console.log('\n9. 배포 후 검증 (시뮬레이션)...');
 
-  await new Promise((resolve) => setTimeout(resolve, 5000));
+  await new Promise((resolve) => setTimeout(resolve, DEPLOYMENT_WAIT_TIME_MS));
 
   const postDeployCheck = {
     before: {
-      activeConnections: 495,
-      responseTime: 5000
+      activeConnections: PRE_DEPLOY_ACTIVE_CONNECTIONS,
+      responseTime: PRE_DEPLOY_RESPONSE_TIME
     },
     after: {
-      activeConnections: 45,
-      responseTime: 250
+      activeConnections: POST_DEPLOY_ACTIVE_CONNECTIONS,
+      responseTime: POST_DEPLOY_RESPONSE_TIME
     }
   };
 

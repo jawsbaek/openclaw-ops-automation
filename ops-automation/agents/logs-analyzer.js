@@ -11,6 +11,17 @@ import { createLogger } from '../lib/logger.js';
 const logger = createLogger('logs-analyzer');
 
 /**
+ * Constants
+ */
+const DEFAULT_TAIL_LINES = 1000;
+const MAX_SAMPLE_LINES_PER_PATTERN = 3;
+const REPEATED_ERROR_THRESHOLD = 10;
+const RECENT_ERRORS_WINDOW = 50;
+const ERROR_BURST_THRESHOLD = 30;
+const MAX_SAMPLE_ERRORS_DISPLAY = 5;
+const NORMALIZED_ERROR_LENGTH = 100;
+
+/**
  * Error pattern definitions
  */
 const ERROR_PATTERNS = [
@@ -32,7 +43,7 @@ const ERROR_PATTERNS = [
  * @param {number} tailLines - Number of lines to read from end (0 = all)
  * @returns {string} Log file content
  */
-function readLogFile(logPath, tailLines = 1000) {
+function readLogFile(logPath, tailLines = DEFAULT_TAIL_LINES) {
   if (!existsSync(logPath)) {
     logger.warn(`Log file not found: ${logPath}`);
     return '';
@@ -77,7 +88,7 @@ function analyzePatterns(content) {
       findings.bySeverity[errorDef.severity] += count;
       findings.byCategory[errorDef.category] = (findings.byCategory[errorDef.category] || 0) + count;
 
-      const sampleLines = lines.filter((line) => errorDef.pattern.test(line)).slice(0, 3);
+      const sampleLines = lines.filter((line) => errorDef.pattern.test(line)).slice(0, MAX_SAMPLE_LINES_PER_PATTERN);
       if (sampleLines.length > 0) {
         findings.samples.push({
           category: errorDef.category,
@@ -104,13 +115,13 @@ function detectAnomalies(content) {
   const errorCounts = {};
   lines.forEach((line) => {
     if (/error|ERROR|Error/i.test(line)) {
-      const normalized = line.replace(/\d{4}-\d{2}-\d{2}.*?\s/, '').slice(0, 100);
+      const normalized = line.replace(/\d{4}-\d{2}-\d{2}.*?\s/, '').slice(0, NORMALIZED_ERROR_LENGTH);
       errorCounts[normalized] = (errorCounts[normalized] || 0) + 1;
     }
   });
 
   Object.entries(errorCounts).forEach(([msg, count]) => {
-    if (count > 10) {
+    if (count > REPEATED_ERROR_THRESHOLD) {
       anomalies.push({
         type: 'repeated_error',
         count,
@@ -120,8 +131,8 @@ function detectAnomalies(content) {
     }
   });
 
-  const recentErrors = lines.filter((l) => /error|ERROR|Error/i.test(l)).slice(-50);
-  if (recentErrors.length > 30) {
+  const recentErrors = lines.filter((l) => /error|ERROR|Error/i.test(l)).slice(-RECENT_ERRORS_WINDOW);
+  if (recentErrors.length > ERROR_BURST_THRESHOLD) {
     anomalies.push({
       type: 'error_burst',
       count: recentErrors.length,
@@ -211,7 +222,7 @@ function generateDetailedFinding(result) {
 
   if (result.findings.samples.length > 0) {
     section += `**Sample Errors:**\n\n`;
-    result.findings.samples.slice(0, 5).forEach((sample) => {
+    result.findings.samples.slice(0, MAX_SAMPLE_ERRORS_DISPLAY).forEach((sample) => {
       section += `**${sample.category}** (${sample.severity}, count: ${sample.count}):\n`;
       section += `\`\`\`\n${sample.examples[0]}\n\`\`\`\n\n`;
     });
@@ -289,7 +300,7 @@ export async function analyzeLogs() {
   for (const logPath of logPaths) {
     logger.info(`Analyzing log: ${logPath}`);
 
-    const content = readLogFile(logPath, 1000);
+    const content = readLogFile(logPath, DEFAULT_TAIL_LINES);
     if (!content) continue;
 
     const findings = analyzePatterns(content);
