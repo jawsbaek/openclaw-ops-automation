@@ -3,7 +3,18 @@
  * @fileoverview Unit tests for log collection and parsing logic
  */
 
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import LogCollector from '../../../src/diagnostic/log-collector.js';
+
+// Mock logger
+vi.mock('../../../lib/logger.js', () => ({
+  default: () => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
+  })
+}));
 
 // Test constants
 const DEFAULT_MAX_BYTES = 1000000;
@@ -350,6 +361,489 @@ describe('LogCollector', () => {
       const parsed = collector.parseErrorLogs(results);
 
       expect(parsed.errors).toHaveLength(100);
+    });
+
+    test('should skip failed results', () => {
+      const results = [
+        { host: 'host1', success: false, stdout: 'Error output' },
+        { host: 'host2', success: true, stdout: '2026-02-02T02:45:30 ERROR Valid error' }
+      ];
+
+      const parsed = collector.parseErrorLogs(results);
+
+      expect(parsed.errorCount).toBe(1);
+      expect(parsed.errors[0].host).toBe('host2');
+    });
+
+    test('should skip results without stdout', () => {
+      const results = [
+        { host: 'host1', success: true, stdout: null },
+        { host: 'host2', success: true, stdout: '2026-02-02T02:45:30 ERROR Valid error' }
+      ];
+
+      const parsed = collector.parseErrorLogs(results);
+
+      expect(parsed.errorCount).toBe(1);
+      expect(parsed.errors[0].host).toBe('host2');
+    });
+
+    test('should skip empty lines in results', () => {
+      const results = [
+        {
+          host: 'host1',
+          success: true,
+          stdout: 'ERROR line1\n\n\n   \nERROR line2'
+        }
+      ];
+
+      const parsed = collector.parseErrorLogs(results);
+
+      expect(parsed.errorCount).toBe(2);
+    });
+  });
+
+  describe('parseSearchResults', () => {
+    test('should skip failed results', () => {
+      const results = [
+        { host: 'host1', success: false, stdout: 'ERROR: output' },
+        { host: 'host2', success: true, stdout: 'ERROR: valid result' }
+      ];
+
+      const parsed = collector.parseSearchResults(results, 'ERROR');
+
+      expect(parsed.matchCount).toBe(1);
+      expect(parsed.matches[0].host).toBe('host2');
+    });
+
+    test('should skip results without stdout', () => {
+      const results = [
+        { host: 'host1', success: true, stdout: undefined },
+        { host: 'host2', success: true, stdout: 'ERROR: valid result' }
+      ];
+
+      const parsed = collector.parseSearchResults(results, 'ERROR');
+
+      expect(parsed.matchCount).toBe(1);
+      expect(parsed.matches[0].host).toBe('host2');
+    });
+
+    test('should only include lines containing the pattern', () => {
+      const results = [
+        {
+          host: 'host1',
+          success: true,
+          stdout: 'Line with ERROR\nLine without\nAnother ERROR line'
+        }
+      ];
+
+      const parsed = collector.parseSearchResults(results, 'ERROR');
+
+      expect(parsed.matchCount).toBe(2);
+      expect(parsed.matches[0].line).toContain('ERROR');
+      expect(parsed.matches[1].line).toContain('ERROR');
+    });
+  });
+
+  describe('parseAndMerge - edge cases', () => {
+    test('should handle logs without timestamps in sorting', () => {
+      const results = [
+        {
+          host: 'host1',
+          success: true,
+          stdout: 'No timestamp log\nAnother no timestamp'
+        },
+        {
+          host: 'host2',
+          success: true,
+          stdout: 'Also no timestamp'
+        }
+      ];
+
+      const logs = collector.parseAndMerge(results);
+
+      expect(logs).toHaveLength(3);
+      for (const log of logs) {
+        expect(log.timestamp).toBeNull();
+      }
+    });
+
+    test('should handle mixed timestamp and no-timestamp logs', () => {
+      const results = [
+        {
+          host: 'host1',
+          success: true,
+          stdout: '2026-02-02T02:45:30Z INFO With timestamp\nNo timestamp here'
+        }
+      ];
+
+      const logs = collector.parseAndMerge(results);
+
+      expect(logs).toHaveLength(2);
+      expect(logs.some((l) => l.timestamp !== null)).toBe(true);
+      expect(logs.some((l) => l.timestamp === null)).toBe(true);
+    });
+
+    test('should skip results without stdout', () => {
+      const results = [
+        { host: 'host1', success: true, stdout: undefined },
+        { host: 'host2', success: true, stdout: '2026-02-02T02:45:30Z INFO Valid log' }
+      ];
+
+      const logs = collector.parseAndMerge(results);
+
+      expect(logs).toHaveLength(1);
+      expect(logs[0].host).toBe('host2');
+    });
+  });
+
+  describe('buildGrepCommand - edge cases', () => {
+    test('should include until clause when timeRange has until', () => {
+      const timeRange = { since: '1 hour ago', until: '10 minutes ago' };
+      const command = collector.buildGrepCommand('/var/log/app.log', 'ERROR', timeRange, 0);
+
+      expect(command).toContain('--until "10 minutes ago"');
+    });
+
+    test('should include context lines with journalctl', () => {
+      const timeRange = { since: '1 hour ago' };
+      const command = collector.buildGrepCommand('/var/log/app.log', 'ERROR', timeRange, 5);
+
+      expect(command).toContain('A5');
+      expect(command).toContain('B5');
+    });
+  });
+
+  describe('collect', () => {
+    test('should collect logs from multiple targets', async () => {
+      mockSSHExecutor.execute = vi.fn().mockResolvedValue({
+        success: true,
+        results: [
+          { host: 'host1', success: true, stdout: '2026-02-02T02:45:30Z INFO Log from host1' },
+          { host: 'host2', success: true, stdout: '2026-02-02T02:45:31Z INFO Log from host2' }
+        ]
+      });
+
+      const result = await collector.collect({
+        targets: ['host1', 'host2'],
+        logPath: '/var/log/app.log',
+        timeRange: { since: '1 hour ago' }
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.logs).toHaveLength(2);
+      expect(result.summary.totalLines).toBe(2);
+      expect(result.summary.hosts).toBe(2);
+      expect(mockSSHExecutor.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: ['host1', 'host2'],
+          options: { parallel: true, timeout: 60000 }
+        })
+      );
+    });
+
+    test('should extract errors in summary', async () => {
+      mockSSHExecutor.execute = vi.fn().mockResolvedValue({
+        success: true,
+        results: [
+          {
+            host: 'host1',
+            success: true,
+            stdout: '2026-02-02T02:45:30Z INFO Normal log\n2026-02-02T02:45:31Z ERROR Error log'
+          }
+        ]
+      });
+
+      const result = await collector.collect({
+        targets: ['host1'],
+        logPath: '/var/log/app.log'
+      });
+
+      expect(result.summary.errors).toHaveLength(1);
+      expect(result.summary.errors[0].level).toBe('ERROR');
+    });
+
+    test('should record collection in history', async () => {
+      mockSSHExecutor.execute = vi.fn().mockResolvedValue({
+        success: true,
+        results: [{ host: 'host1', success: true, stdout: '2026-02-02T02:45:30Z INFO Log' }]
+      });
+
+      await collector.collect({
+        targets: ['host1'],
+        logPath: '/var/log/app.log'
+      });
+
+      expect(collector.collectionHistory).toHaveLength(1);
+      expect(collector.collectionHistory[0].logPath).toBe('/var/log/app.log');
+    });
+  });
+
+  describe('search', () => {
+    test('should search for patterns across targets', async () => {
+      mockSSHExecutor.execute = vi.fn().mockResolvedValue({
+        success: true,
+        results: [
+          { host: 'host1', success: true, stdout: 'ERROR: Connection failed' },
+          { host: 'host2', success: true, stdout: 'ERROR: Timeout occurred' }
+        ]
+      });
+
+      const result = await collector.search({
+        targets: ['host1', 'host2'],
+        logPath: '/var/log/app.log',
+        pattern: 'ERROR'
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.matchCount).toBe(2);
+      expect(result.pattern).toBe('ERROR');
+    });
+
+    test('should pass context lines option', async () => {
+      mockSSHExecutor.execute = vi.fn().mockResolvedValue({
+        success: true,
+        results: []
+      });
+
+      await collector.search({
+        targets: ['host1'],
+        logPath: '/var/log/app.log',
+        pattern: 'ERROR',
+        contextLines: 5
+      });
+
+      expect(mockSSHExecutor.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: expect.stringContaining('A5')
+        })
+      );
+    });
+  });
+
+  describe('collectErrors', () => {
+    test('should collect error logs from targets', async () => {
+      mockSSHExecutor.execute = vi.fn().mockResolvedValue({
+        success: true,
+        results: [{ host: 'host1', success: true, stdout: '2026-02-02T02:45:30 ERROR Connection failed' }]
+      });
+
+      const result = await collector.collectErrors(['host1'], '/var/log/app.log', '1 hour ago');
+
+      expect(result.success).toBe(true);
+      expect(result.errorCount).toBe(1);
+      expect(mockSSHExecutor.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: { parallel: true, timeout: 30000 }
+        })
+      );
+    });
+
+    test('should use default since value', async () => {
+      mockSSHExecutor.execute = vi.fn().mockResolvedValue({
+        success: true,
+        results: []
+      });
+
+      await collector.collectErrors(['host1'], '/var/log/app.log');
+
+      expect(mockSSHExecutor.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: expect.stringContaining('1 hour ago')
+        })
+      );
+    });
+  });
+
+  describe('stream', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    test('should return streaming status', async () => {
+      mockSSHExecutor.execute = vi.fn().mockResolvedValue({
+        success: true,
+        results: [{ stdout: '' }]
+      });
+
+      const result = await collector.stream({
+        target: 'host1',
+        logPath: '/var/log/app.log',
+        duration: 10000
+      });
+
+      expect(result.streaming).toBe(true);
+      expect(result.duration).toBe(10000);
+    });
+
+    test('should call onData when new lines are received', async () => {
+      const onData = vi.fn();
+      mockSSHExecutor.execute = vi.fn().mockResolvedValue({
+        success: true,
+        results: [{ stdout: 'New log line\nAnother line' }]
+      });
+
+      await collector.stream({
+        target: 'host1',
+        logPath: '/var/log/app.log',
+        onData,
+        duration: 10000
+      });
+
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(onData).toHaveBeenCalledWith(['New log line', 'Another line']);
+    });
+
+    test('should not call onData when no new lines', async () => {
+      const onData = vi.fn();
+      mockSSHExecutor.execute = vi.fn().mockResolvedValue({
+        success: true,
+        results: [{ stdout: '' }]
+      });
+
+      await collector.stream({
+        target: 'host1',
+        logPath: '/var/log/app.log',
+        onData,
+        duration: 10000
+      });
+
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(onData).not.toHaveBeenCalled();
+    });
+
+    test('should stop streaming after duration', async () => {
+      mockSSHExecutor.execute = vi.fn().mockResolvedValue({
+        success: true,
+        results: [{ stdout: 'Log line' }]
+      });
+
+      await collector.stream({
+        target: 'host1',
+        logPath: '/var/log/app.log',
+        duration: 5000
+      });
+
+      await vi.advanceTimersByTimeAsync(6000);
+
+      const callCount = mockSSHExecutor.execute.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(4000);
+
+      expect(mockSSHExecutor.execute.mock.calls.length).toBe(callCount);
+    });
+
+    test('should handle streaming errors gracefully', async () => {
+      mockSSHExecutor.execute = vi.fn().mockRejectedValue(new Error('Connection failed'));
+
+      await collector.stream({
+        target: 'host1',
+        logPath: '/var/log/app.log',
+        duration: 10000
+      });
+
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    test('should handle failed result gracefully', async () => {
+      const onData = vi.fn();
+      mockSSHExecutor.execute = vi.fn().mockResolvedValue({
+        success: false,
+        results: [{ stdout: 'Should not process' }]
+      });
+
+      await collector.stream({
+        target: 'host1',
+        logPath: '/var/log/app.log',
+        onData,
+        duration: 10000
+      });
+
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(onData).not.toHaveBeenCalled();
+    });
+
+    test('should increment lastLines counter correctly', async () => {
+      const onData = vi.fn();
+      let callCount = 0;
+
+      mockSSHExecutor.execute = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({ success: true, results: [{ stdout: 'Line 1\nLine 2' }] });
+        }
+        return Promise.resolve({ success: true, results: [{ stdout: 'Line 3' }] });
+      });
+
+      await collector.stream({
+        target: 'host1',
+        logPath: '/var/log/app.log',
+        onData,
+        duration: 10000
+      });
+
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(onData).toHaveBeenCalledWith(['Line 1', 'Line 2']);
+
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(onData).toHaveBeenCalledWith(['Line 3']);
+
+      expect(mockSSHExecutor.execute.mock.calls[1][0].command).toContain('tail -n +3');
+    });
+
+    test('should use default duration when not specified', async () => {
+      mockSSHExecutor.execute = vi.fn().mockResolvedValue({
+        success: true,
+        results: [{ stdout: '' }]
+      });
+
+      const result = await collector.stream({
+        target: 'host1',
+        logPath: '/var/log/app.log'
+      });
+
+      expect(result.duration).toBe(60000);
+    });
+  });
+
+  describe('parseLogLine - Nginx format', () => {
+    test('should parse nginx log format', () => {
+      const line = '[02/Feb/2026:02:45:30 +0000] GET /api/users 200';
+      const parsed = collector.parseLogLine(line, 'host1');
+
+      expect(parsed.timestamp).toBe('02/Feb/2026:02:45:30 +0000');
+      expect(parsed.host).toBe('host1');
+    });
+  });
+
+  describe('extractErrors - edge cases', () => {
+    test('should handle logs with null level', () => {
+      const logs = [
+        { level: null, message: 'Some error message' },
+        { level: 'INFO', message: 'normal log' }
+      ];
+
+      const errors = collector.extractErrors(logs);
+
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain('error');
+    });
+
+    test('should handle logs with null message', () => {
+      const logs = [
+        { level: 'ERROR', message: null },
+        { level: 'INFO', message: 'normal log' }
+      ];
+
+      const errors = collector.extractErrors(logs);
+
+      expect(errors).toHaveLength(1);
+      expect(errors[0].level).toBe('ERROR');
     });
   });
 });
