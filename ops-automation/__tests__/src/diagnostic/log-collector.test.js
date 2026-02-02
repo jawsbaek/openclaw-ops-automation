@@ -5,6 +5,12 @@
 
 import LogCollector from '../../../src/diagnostic/log-collector.js';
 
+// Test constants
+const DEFAULT_MAX_BYTES = 1000000;
+const LARGE_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+const CONTEXT_LINES = 3;
+const DEFAULT_TAIL_LINES = 1000;
+
 describe('LogCollector', () => {
   let collector;
   let mockSSHExecutor;
@@ -30,7 +36,7 @@ describe('LogCollector', () => {
   describe('buildLogCommands', () => {
     test('should build command for time range', () => {
       const timeRange = { since: '1 hour ago', until: '10 minutes ago' };
-      const commands = collector.buildLogCommands(null, timeRange, [], 1000000);
+      const commands = collector.buildLogCommands(null, timeRange, [], DEFAULT_MAX_BYTES);
 
       expect(commands.collect).toContain('journalctl');
       expect(commands.collect).toContain('--since "1 hour ago"');
@@ -38,7 +44,7 @@ describe('LogCollector', () => {
     });
 
     test('should build command for file-based logs', () => {
-      const commands = collector.buildLogCommands('/var/log/app.log', null, [], 100 * 1024 * 1024);
+      const commands = collector.buildLogCommands('/var/log/app.log', null, [], LARGE_FILE_SIZE_BYTES);
 
       expect(commands.collect).toContain('tail -n');
       expect(commands.collect).toContain('/var/log/app.log');
@@ -46,14 +52,14 @@ describe('LogCollector', () => {
 
     test('should add filters to command', () => {
       const filters = ['ERROR', 'WARN'];
-      const commands = collector.buildLogCommands('/var/log/app.log', null, filters, 1000000);
+      const commands = collector.buildLogCommands('/var/log/app.log', null, filters, DEFAULT_MAX_BYTES);
 
       expect(commands.collect).toContain('grep -E');
       expect(commands.collect).toContain('ERROR\\|WARN');
     });
 
     test('should include count command', () => {
-      const commands = collector.buildLogCommands('/var/log/app.log', null, [], 1000000);
+      const commands = collector.buildLogCommands('/var/log/app.log', null, [], DEFAULT_MAX_BYTES);
 
       expect(commands.count).toContain('wc -l');
     });
@@ -71,11 +77,11 @@ describe('LogCollector', () => {
     });
 
     test('should build grep with context lines', () => {
-      const command = collector.buildGrepCommand('/var/log/app.log', 'ERROR', null, 3);
+      const command = collector.buildGrepCommand('/var/log/app.log', 'ERROR', null, CONTEXT_LINES);
 
       expect(command).toContain('grep');
-      expect(command).toContain('-iA3');
-      expect(command).toContain('-B3');
+      expect(command).toContain(`-iA${CONTEXT_LINES}`);
+      expect(command).toContain(`-B${CONTEXT_LINES}`);
     });
 
     test('should build grep without context lines', () => {
