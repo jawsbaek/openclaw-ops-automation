@@ -5,6 +5,15 @@
 
 import Profiler from '../../../src/diagnostic/profiler.js';
 
+// Test constants for metrics thresholds
+const HIGH_CPU_USAGE = 85;
+const NORMAL_CPU_USAGE = 40;
+const NORMAL_MEMORY_USAGE = 50;
+const HIGH_MEMORY_USAGE = 88;
+const CRITICAL_DISK_USAGE = 92;
+const NORMAL_DISK_USAGE = 60;
+const NORMAL_CONNECTION_COUNT = 100;
+
 describe('Profiler', () => {
   let profiler;
   let mockSSHExecutor;
@@ -31,10 +40,10 @@ describe('Profiler', () => {
   describe('identifyBottlenecks', () => {
     test('should identify CPU bottleneck', () => {
       const metrics = {
-        cpu: { usage: { usage: 85 } },
-        memory: { summary: { usagePercent: 50 } },
+        cpu: { usage: { usage: HIGH_CPU_USAGE } },
+        memory: { summary: { usagePercent: NORMAL_MEMORY_USAGE } },
         disk: { usage: [] },
-        network: { establishedConnections: 100 }
+        network: { establishedConnections: NORMAL_CONNECTION_COUNT }
       };
 
       const bottlenecks = profiler.identifyBottlenecks(metrics);
@@ -49,10 +58,10 @@ describe('Profiler', () => {
 
     test('should identify memory bottleneck', () => {
       const metrics = {
-        cpu: { usage: { usage: 40 } },
-        memory: { summary: { usagePercent: 88 } },
+        cpu: { usage: { usage: NORMAL_CPU_USAGE } },
+        memory: { summary: { usagePercent: HIGH_MEMORY_USAGE } },
         disk: { usage: [] },
-        network: { establishedConnections: 100 }
+        network: { establishedConnections: NORMAL_CONNECTION_COUNT }
       };
 
       const bottlenecks = profiler.identifyBottlenecks(metrics);
@@ -67,10 +76,10 @@ describe('Profiler', () => {
 
     test('should identify disk bottleneck', () => {
       const metrics = {
-        cpu: { usage: { usage: 40 } },
-        memory: { summary: { usagePercent: 50 } },
-        disk: { usage: [{ mountPoint: '/', usePercent: '92%' }] },
-        network: { establishedConnections: 100 }
+        cpu: { usage: { usage: NORMAL_CPU_USAGE } },
+        memory: { summary: { usagePercent: NORMAL_MEMORY_USAGE } },
+        disk: { usage: [{ mountPoint: '/', usePercent: `${CRITICAL_DISK_USAGE}%` }] },
+        network: { establishedConnections: NORMAL_CONNECTION_COUNT }
       };
 
       const bottlenecks = profiler.identifyBottlenecks(metrics);
@@ -85,10 +94,10 @@ describe('Profiler', () => {
 
     test('should return empty array when no bottlenecks', () => {
       const metrics = {
-        cpu: { usage: { usage: 40 } },
-        memory: { summary: { usagePercent: 50 } },
-        disk: { usage: [{ mountPoint: '/', usePercent: '60%' }] },
-        network: { establishedConnections: 100 }
+        cpu: { usage: { usage: NORMAL_CPU_USAGE } },
+        memory: { summary: { usagePercent: NORMAL_MEMORY_USAGE } },
+        disk: { usage: [{ mountPoint: '/', usePercent: `${NORMAL_DISK_USAGE}%` }] },
+        network: { establishedConnections: NORMAL_CONNECTION_COUNT }
       };
 
       const bottlenecks = profiler.identifyBottlenecks(metrics);
