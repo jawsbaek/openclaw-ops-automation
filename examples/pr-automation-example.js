@@ -46,8 +46,4 @@ function canAutoMerge(pr) {
   return Object.values(criteria).every(Boolean);
 }
 
-module.exports = {
-  greetUser,
-  calculateSum,
-  canAutoMerge
-};
+export { greetUser, calculateSum, canAutoMerge };
