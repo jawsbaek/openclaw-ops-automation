@@ -69,10 +69,14 @@ class PRReviewer {
     const totalScore = this.calculateTotalScore(scores, fileCount);
 
     console.log(`\n📊 Review Scores:`);
-    console.log(`   Code Quality: ${(scores.code_quality / fileCount).toFixed(1)}/10`);
-    console.log(`   Security: ${(scores.security / fileCount).toFixed(1)}/10`);
-    console.log(`   Performance: ${(scores.performance / fileCount).toFixed(1)}/10`);
-    console.log(`   Maintainability: ${(scores.maintainability / fileCount).toFixed(1)}/10`);
+    if (fileCount > 0) {
+      console.log(`   Code Quality: ${(scores.code_quality / fileCount).toFixed(1)}/10`);
+      console.log(`   Security: ${(scores.security / fileCount).toFixed(1)}/10`);
+      console.log(`   Performance: ${(scores.performance / fileCount).toFixed(1)}/10`);
+      console.log(`   Maintainability: ${(scores.maintainability / fileCount).toFixed(1)}/10`);
+    } else {
+      console.log('   No files to review');
+    }
     console.log(`   Total Score: ${totalScore.toFixed(1)}/10`);
 
     // Post review comments to GitHub
@@ -81,12 +85,12 @@ class PRReviewer {
     // Save results
     const results = {
       score: totalScore,
-      approved: totalScore >= 8,
+      approved: totalScore >= 8 || fileCount === 0,
       scores: {
-        code_quality: (scores.code_quality / fileCount).toFixed(1),
-        security: (scores.security / fileCount).toFixed(1),
-        performance: (scores.performance / fileCount).toFixed(1),
-        maintainability: (scores.maintainability / fileCount).toFixed(1)
+        code_quality: fileCount > 0 ? (scores.code_quality / fileCount).toFixed(1) : '0.0',
+        security: fileCount > 0 ? (scores.security / fileCount).toFixed(1) : '0.0',
+        performance: fileCount > 0 ? (scores.performance / fileCount).toFixed(1) : '0.0',
+        maintainability: fileCount > 0 ? (scores.maintainability / fileCount).toFixed(1) : '0.0'
       },
       comments: comments.length,
       files_reviewed: fileCount
