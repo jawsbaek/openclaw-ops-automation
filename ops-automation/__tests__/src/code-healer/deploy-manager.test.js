@@ -532,5 +532,551 @@ describe('DeployManager', () => {
       expect(executedCommands.some((cmd) => cmd.includes('backup'))).toBe(true);
       expect(executedCommands.some((cmd) => cmd.includes('echo'))).toBe(true);
     });
+
+    test('should restart services when restartRequired is true', async () => {
+      const executedCommands = [];
+      mockSSHExecutor.execute = (opts) => {
+        executedCommands.push(opts.command);
+        return Promise.resolve({ success: true, results: [{ success: true, exitCode: 0 }] });
+      };
+
+      const deployment = {
+        patch: { changes: [{ file: '/app/test.js', patched: 'content' }] },
+        repository: { service: 'myapp' }
+      };
+      const stage = { name: 'test' };
+
+      deployManager.config.restartRequired = true;
+      await deployManager.deployToStage(deployment, stage);
+
+      expect(executedCommands.some((cmd) => cmd.includes('systemctl restart'))).toBe(true);
+    });
+  });
+
+  describe('monitorMetrics', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    test('should collect metrics over duration', async () => {
+      const stage = { name: 'test' };
+      const duration = 20000;
+
+      const metricsPromise = deployManager.monitorMetrics(stage, duration);
+      await vi.advanceTimersByTimeAsync(duration + 1000);
+      const metrics = await metricsPromise;
+
+      expect(metrics).toHaveProperty('errorRate');
+      expect(metrics).toHaveProperty('responseTime');
+      expect(metrics).toHaveProperty('cpu');
+      expect(metrics).toHaveProperty('memory');
+      expect(metrics).toHaveProperty('samples');
+    });
+
+    test('should calculate average of collected samples', async () => {
+      const stage = { name: 'test' };
+      const duration = 10000;
+
+      const metricsPromise = deployManager.monitorMetrics(stage, duration);
+      await vi.advanceTimersByTimeAsync(duration + 1000);
+      const metrics = await metricsPromise;
+
+      expect(typeof metrics.errorRate).toBe('number');
+      expect(typeof metrics.responseTime).toBe('number');
+      expect(typeof metrics.cpu).toBe('number');
+      expect(typeof metrics.memory).toBe('number');
+    });
+  });
+
+  describe('deployHotfix', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    test('should create deployment record with canary strategy', async () => {
+      deployManager.deployCanary = vi.fn().mockResolvedValue(undefined);
+      deployManager.prepareDeployment = vi.fn().mockResolvedValue(undefined);
+
+      const options = {
+        patch: { changes: [] },
+        repository: { name: 'test-repo' },
+        strategy: 'canary'
+      };
+
+      const deployPromise = deployManager.deployHotfix(options);
+      await vi.runAllTimersAsync();
+      const result = await deployPromise;
+
+      expect(result.strategy).toBe('canary');
+      expect(result.status).toBe('completed');
+      expect(result.id).toMatch(/^deploy-/);
+      expect(deployManager.deployCanary).toHaveBeenCalled();
+    });
+
+    test('should create deployment record with blue_green strategy', async () => {
+      deployManager.deployBlueGreen = vi.fn().mockResolvedValue(undefined);
+      deployManager.prepareDeployment = vi.fn().mockResolvedValue(undefined);
+
+      const options = {
+        patch: { changes: [] },
+        repository: { name: 'test-repo' },
+        strategy: 'blue_green'
+      };
+
+      const deployPromise = deployManager.deployHotfix(options);
+      await vi.runAllTimersAsync();
+      const result = await deployPromise;
+
+      expect(result.strategy).toBe('blue_green');
+      expect(result.status).toBe('completed');
+      expect(deployManager.deployBlueGreen).toHaveBeenCalled();
+    });
+
+    test('should use direct strategy for unknown strategy', async () => {
+      deployManager.deployDirect = vi.fn().mockResolvedValue(undefined);
+      deployManager.prepareDeployment = vi.fn().mockResolvedValue(undefined);
+
+      const options = {
+        patch: { changes: [] },
+        repository: { name: 'test-repo' },
+        strategy: 'direct'
+      };
+
+      const deployPromise = deployManager.deployHotfix(options);
+      await vi.runAllTimersAsync();
+      const result = await deployPromise;
+
+      expect(result.status).toBe('completed');
+      expect(deployManager.deployDirect).toHaveBeenCalled();
+    });
+
+    test('should use canary as default strategy', async () => {
+      deployManager.deployCanary = vi.fn().mockResolvedValue(undefined);
+      deployManager.prepareDeployment = vi.fn().mockResolvedValue(undefined);
+
+      const options = {
+        patch: { changes: [] },
+        repository: { name: 'test-repo' }
+      };
+
+      const deployPromise = deployManager.deployHotfix(options);
+      await vi.runAllTimersAsync();
+      const result = await deployPromise;
+
+      expect(result.strategy).toBe('canary');
+    });
+
+    test('should trigger auto-rollback on failure when enabled', async () => {
+      const error = new Error('Deployment failed');
+      deployManager.prepareDeployment = vi.fn().mockRejectedValue(error);
+      deployManager.rollback = vi.fn().mockResolvedValue(undefined);
+
+      const options = {
+        patch: { changes: [] },
+        repository: { name: 'test-repo' },
+        autoRollback: true
+      };
+
+      const deployPromise = deployManager.deployHotfix(options);
+      const rejectionPromise = expect(deployPromise).rejects.toThrow('Deployment failed');
+      await vi.runAllTimersAsync();
+      await rejectionPromise;
+
+      expect(deployManager.rollback).toHaveBeenCalled();
+    });
+
+    test('should not trigger rollback when autoRollback is false', async () => {
+      const error = new Error('Deployment failed');
+      deployManager.prepareDeployment = vi.fn().mockRejectedValue(error);
+      deployManager.rollback = vi.fn().mockResolvedValue(undefined);
+
+      const options = {
+        patch: { changes: [] },
+        repository: { name: 'test-repo' },
+        autoRollback: false
+      };
+
+      const deployPromise = deployManager.deployHotfix(options);
+      const rejectionPromise = expect(deployPromise).rejects.toThrow('Deployment failed');
+      await vi.runAllTimersAsync();
+      await rejectionPromise;
+
+      expect(deployManager.rollback).not.toHaveBeenCalled();
+    });
+
+    test('should set deployment status to failed on error', async () => {
+      const error = new Error('Deployment failed');
+      deployManager.prepareDeployment = vi.fn().mockRejectedValue(error);
+      deployManager.rollback = vi.fn().mockResolvedValue(undefined);
+
+      const options = {
+        patch: { changes: [] },
+        repository: { name: 'test-repo' },
+        autoRollback: false
+      };
+
+      const deployPromise = deployManager.deployHotfix(options);
+      const rejectionPromise = expect(deployPromise).rejects.toThrow('Deployment failed');
+      await vi.runAllTimersAsync();
+      await rejectionPromise;
+
+      const deployment = Array.from(deployManager.deployments.values())[0];
+      expect(deployment.status).toBe('failed');
+      expect(deployment.error).toBe('Deployment failed');
+    });
+
+    test('should remove from activeDeployments after completion', async () => {
+      deployManager.deployCanary = vi.fn().mockResolvedValue(undefined);
+      deployManager.prepareDeployment = vi.fn().mockResolvedValue(undefined);
+
+      const options = {
+        patch: { changes: [] },
+        repository: { name: 'test-repo' }
+      };
+
+      const deployPromise = deployManager.deployHotfix(options);
+      await vi.runAllTimersAsync();
+      await deployPromise;
+
+      expect(deployManager.activeDeployments.size).toBe(0);
+    });
+
+    test('should remove from activeDeployments after failure', async () => {
+      deployManager.prepareDeployment = vi.fn().mockRejectedValue(new Error('Failed'));
+      deployManager.rollback = vi.fn().mockResolvedValue(undefined);
+
+      const options = {
+        patch: { changes: [] },
+        repository: { name: 'test-repo' },
+        autoRollback: false
+      };
+
+      const deployPromise = deployManager.deployHotfix(options);
+      const rejectionPromise = expect(deployPromise).rejects.toThrow('Failed');
+      await vi.runAllTimersAsync();
+      await rejectionPromise;
+
+      expect(deployManager.activeDeployments.size).toBe(0);
+    });
+  });
+
+  describe('deployCanary', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    test('should iterate through canary stages', async () => {
+      deployManager.deployToStage = vi.fn().mockResolvedValue(undefined);
+      deployManager.healthCheck = vi.fn().mockResolvedValue(true);
+      deployManager.monitorMetrics = vi.fn().mockResolvedValue({
+        errorRate: 0.1,
+        responseTime: 100,
+        cpu: 30,
+        memory: 50
+      });
+
+      deployManager.config.canary.stages = [{ name: 'test', percentage: 100, requireApproval: false, waitTime: 0 }];
+
+      const deployment = {
+        id: 'test-deploy',
+        patch: { changes: [] },
+        repository: {},
+        stages: []
+      };
+
+      const canaryPromise = deployManager.deployCanary(deployment);
+      await vi.runAllTimersAsync();
+      await canaryPromise;
+
+      expect(deployment.stages.length).toBe(1);
+      expect(deployment.stages[0].status).toBe('success');
+    });
+
+    test('should throw on metric validation failure', async () => {
+      deployManager.deployToStage = vi.fn().mockResolvedValue(undefined);
+      deployManager.healthCheck = vi.fn().mockResolvedValue(true);
+      deployManager.monitorMetrics = vi.fn().mockResolvedValue({
+        errorRate: 5.0,
+        responseTime: 100,
+        cpu: 30,
+        memory: 50
+      });
+
+      deployManager.config.canary.stages = [{ name: 'test', percentage: 100 }];
+
+      const deployment = {
+        id: 'test-deploy',
+        patch: { changes: [] },
+        repository: {},
+        stages: []
+      };
+
+      const canaryPromise = deployManager.deployCanary(deployment);
+      const rejectionPromise = expect(canaryPromise).rejects.toThrow('메트릭 검증 실패');
+      await vi.runAllTimersAsync();
+      await rejectionPromise;
+    });
+
+    test('should throw on approval rejection', async () => {
+      deployManager.deployToStage = vi.fn().mockResolvedValue(undefined);
+      deployManager.healthCheck = vi.fn().mockResolvedValue(true);
+      deployManager.monitorMetrics = vi.fn().mockResolvedValue({
+        errorRate: 0.1,
+        responseTime: 100,
+        cpu: 30,
+        memory: 50
+      });
+      deployManager.requestApproval = vi.fn().mockResolvedValue(false);
+
+      deployManager.config.canary.stages = [{ name: 'test', percentage: 100, requireApproval: true }];
+
+      const deployment = {
+        id: 'test-deploy',
+        patch: { changes: [] },
+        repository: {},
+        stages: []
+      };
+
+      const canaryPromise = deployManager.deployCanary(deployment);
+      const rejectionPromise = expect(canaryPromise).rejects.toThrow('배포 승인 거부됨');
+      await vi.runAllTimersAsync();
+      await rejectionPromise;
+    });
+
+    test('should continue when approval is granted', async () => {
+      deployManager.deployToStage = vi.fn().mockResolvedValue(undefined);
+      deployManager.healthCheck = vi.fn().mockResolvedValue(true);
+      deployManager.monitorMetrics = vi.fn().mockResolvedValue({
+        errorRate: 0.1,
+        responseTime: 100,
+        cpu: 30,
+        memory: 50
+      });
+      deployManager.requestApproval = vi.fn().mockResolvedValue(true);
+
+      deployManager.config.canary.stages = [{ name: 'test', percentage: 100, requireApproval: true }];
+
+      const deployment = {
+        id: 'test-deploy',
+        patch: { changes: [] },
+        repository: {},
+        stages: []
+      };
+
+      const canaryPromise = deployManager.deployCanary(deployment);
+      await vi.runAllTimersAsync();
+      await canaryPromise;
+
+      expect(deployment.stages[0].status).toBe('success');
+    });
+
+    test('should wait between stages when waitTime specified', async () => {
+      deployManager.deployToStage = vi.fn().mockResolvedValue(undefined);
+      deployManager.healthCheck = vi.fn().mockResolvedValue(true);
+      deployManager.monitorMetrics = vi.fn().mockResolvedValue({
+        errorRate: 0.1,
+        responseTime: 100,
+        cpu: 30,
+        memory: 50
+      });
+
+      const sleepSpy = vi.spyOn(deployManager, 'sleep');
+
+      deployManager.config.canary.stages = [{ name: 'test', percentage: 100, waitTime: 5000 }];
+
+      const deployment = {
+        id: 'test-deploy',
+        patch: { changes: [] },
+        repository: {},
+        stages: []
+      };
+
+      const canaryPromise = deployManager.deployCanary(deployment);
+      await vi.runAllTimersAsync();
+      await canaryPromise;
+
+      expect(sleepSpy).toHaveBeenCalledWith(5000);
+    });
+
+    test('should record stage metrics on success', async () => {
+      const mockMetrics = {
+        errorRate: 0.1,
+        responseTime: 100,
+        cpu: 30,
+        memory: 50
+      };
+      deployManager.deployToStage = vi.fn().mockResolvedValue(undefined);
+      deployManager.healthCheck = vi.fn().mockResolvedValue(true);
+      deployManager.monitorMetrics = vi.fn().mockResolvedValue(mockMetrics);
+
+      deployManager.config.canary.stages = [{ name: 'test', percentage: 100 }];
+
+      const deployment = {
+        id: 'test-deploy',
+        patch: { changes: [] },
+        repository: {},
+        stages: []
+      };
+
+      const canaryPromise = deployManager.deployCanary(deployment);
+      await vi.runAllTimersAsync();
+      await canaryPromise;
+
+      expect(deployment.stages[0].metrics).toEqual(mockMetrics);
+    });
+
+    test('should set stage status to failed on error', async () => {
+      deployManager.deployToStage = vi.fn().mockRejectedValue(new Error('Stage failed'));
+      deployManager.healthCheck = vi.fn().mockResolvedValue(true);
+
+      deployManager.config.canary.stages = [{ name: 'test', percentage: 100 }];
+
+      const deployment = {
+        id: 'test-deploy',
+        patch: { changes: [] },
+        repository: {},
+        stages: []
+      };
+
+      const canaryPromise = deployManager.deployCanary(deployment);
+      const rejectionPromise = expect(canaryPromise).rejects.toThrow('Stage failed');
+      await vi.runAllTimersAsync();
+      await rejectionPromise;
+
+      expect(deployment.stages[0].status).toBe('failed');
+      expect(deployment.stages[0].error).toBe('Stage failed');
+    });
+  });
+
+  describe('deployBlueGreen', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    test('should complete blue-green deployment successfully', async () => {
+      deployManager.deployToStage = vi.fn().mockResolvedValue(undefined);
+      deployManager.healthCheck = vi.fn().mockResolvedValue(true);
+      deployManager.monitorMetrics = vi.fn().mockResolvedValue({
+        errorRate: 0.1,
+        responseTime: 100,
+        cpu: 30,
+        memory: 50
+      });
+      deployManager.switchTraffic = vi.fn().mockResolvedValue(undefined);
+      deployManager.shutdownEnvironment = vi.fn().mockResolvedValue(undefined);
+
+      const deployment = {
+        id: 'test-deploy',
+        patch: { changes: [] },
+        repository: {},
+        stages: []
+      };
+
+      const blueGreenPromise = deployManager.deployBlueGreen(deployment);
+      await vi.runAllTimersAsync();
+      await blueGreenPromise;
+
+      expect(deployManager.switchTraffic).toHaveBeenCalledWith('green', 10);
+      expect(deployManager.switchTraffic).toHaveBeenCalledWith('green', 50);
+      expect(deployManager.switchTraffic).toHaveBeenCalledWith('green', 100);
+      expect(deployManager.shutdownEnvironment).toHaveBeenCalledWith('blue');
+    });
+
+    test('should rollback traffic on validation failure', async () => {
+      deployManager.deployToStage = vi.fn().mockResolvedValue(undefined);
+      deployManager.healthCheck = vi.fn().mockResolvedValue(true);
+      deployManager.monitorMetrics = vi.fn().mockResolvedValue({
+        errorRate: 5.0,
+        responseTime: 100,
+        cpu: 30,
+        memory: 50
+      });
+      deployManager.switchTraffic = vi.fn().mockResolvedValue(undefined);
+
+      const deployment = {
+        id: 'test-deploy',
+        patch: { changes: [] },
+        repository: {},
+        stages: []
+      };
+
+      const blueGreenPromise = deployManager.deployBlueGreen(deployment);
+      const rejectionPromise = expect(blueGreenPromise).rejects.toThrow('블루-그린 배포 실패');
+      await vi.runAllTimersAsync();
+      await rejectionPromise;
+
+      expect(deployManager.switchTraffic).toHaveBeenCalledWith('blue', 100);
+    });
+
+    test('should deploy to green environment first', async () => {
+      deployManager.deployToStage = vi.fn().mockResolvedValue(undefined);
+      deployManager.healthCheck = vi.fn().mockResolvedValue(true);
+      deployManager.monitorMetrics = vi.fn().mockResolvedValue({
+        errorRate: 0.1,
+        responseTime: 100,
+        cpu: 30,
+        memory: 50
+      });
+      deployManager.switchTraffic = vi.fn().mockResolvedValue(undefined);
+      deployManager.shutdownEnvironment = vi.fn().mockResolvedValue(undefined);
+
+      const deployment = {
+        id: 'test-deploy',
+        patch: { changes: [] },
+        repository: {},
+        stages: []
+      };
+
+      const blueGreenPromise = deployManager.deployBlueGreen(deployment);
+      await vi.runAllTimersAsync();
+      await blueGreenPromise;
+
+      expect(deployManager.deployToStage).toHaveBeenCalledWith(
+        deployment,
+        expect.objectContaining({ name: 'green', environment: 'green' })
+      );
+    });
+
+    test('should perform health check on green environment', async () => {
+      deployManager.deployToStage = vi.fn().mockResolvedValue(undefined);
+      deployManager.healthCheck = vi.fn().mockResolvedValue(true);
+      deployManager.monitorMetrics = vi.fn().mockResolvedValue({
+        errorRate: 0.1,
+        responseTime: 100,
+        cpu: 30,
+        memory: 50
+      });
+      deployManager.switchTraffic = vi.fn().mockResolvedValue(undefined);
+      deployManager.shutdownEnvironment = vi.fn().mockResolvedValue(undefined);
+
+      const deployment = {
+        id: 'test-deploy',
+        patch: { changes: [] },
+        repository: {},
+        stages: []
+      };
+
+      const blueGreenPromise = deployManager.deployBlueGreen(deployment);
+      await vi.runAllTimersAsync();
+      await blueGreenPromise;
+
+      expect(deployManager.healthCheck).toHaveBeenCalledWith(expect.objectContaining({ name: 'green' }), 5);
+    });
   });
 });
