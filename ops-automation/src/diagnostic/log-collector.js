@@ -3,7 +3,9 @@
  * 분산 환경에서 로그를 병렬로 수집하고 분석
  */
 
-const logger = require('../../lib/logger');
+import createLogger from '../../lib/logger.js';
+
+const logger = createLogger('log-collector');
 
 class LogCollector {
   constructor(sshExecutor) {
@@ -392,4 +394,4 @@ class LogCollector {
   }
 }
 
-module.exports = LogCollector;
+export default LogCollector;

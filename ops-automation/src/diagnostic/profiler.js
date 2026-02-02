@@ -3,7 +3,9 @@
  * 시스템 성능 프로파일링 및 병목 지점 분석
  */
 
-const logger = require('../../lib/logger');
+import createLogger from '../../lib/logger.js';
+
+const logger = createLogger('profiler');
 
 class Profiler {
   constructor(sshExecutor) {
@@ -432,4 +434,4 @@ class Profiler {
   }
 }
 
-module.exports = Profiler;
+export default Profiler;
