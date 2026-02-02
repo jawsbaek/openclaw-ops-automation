@@ -27,12 +27,6 @@
     "wrap": true,
     "typedefs": true,
     "navLevel": 2,
-    "sectionOrder": [
-      "Modules",
-      "Classes",
-      "Namespaces",
-      "Tutorials",
-      "Global"
-    ]
+    "sectionOrder": ["Modules", "Classes", "Namespaces", "Tutorials", "Global"]
   }
 }

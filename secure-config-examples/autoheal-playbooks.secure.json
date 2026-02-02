@@ -1,0 +1,146 @@
+{
+  "disk_space_low": {
+    "description": "Clean up disk space when usage exceeds threshold",
+    "condition": {
+      "metric": "disk_usage",
+      "operator": ">",
+      "threshold": 90
+    },
+    "actions": [
+      {
+        "commandId": "cleanup_tmp",
+        "params": { "days": "7" },
+        "description": "Clean temporary files older than 7 days",
+        "timeout_seconds": 60
+      },
+      {
+        "commandId": "cleanup_logs",
+        "params": { "days": "30" },
+        "description": "Remove old log archives",
+        "timeout_seconds": 60
+      },
+      {
+        "commandId": "docker_prune",
+        "params": {},
+        "description": "Clean unused Docker resources",
+        "timeout_seconds": 120
+      }
+    ],
+    "verify": {
+      "metric": "disk_usage",
+      "operator": "<",
+      "threshold": 85,
+      "retry_count": 3,
+      "retry_interval_seconds": 60
+    },
+    "requires_approval": false,
+    "required_permission": "execute:disk_cleanup"
+  },
+  "process_down": {
+    "description": "Restart a stopped critical process",
+    "condition": {
+      "metric": "process_status",
+      "operator": "==",
+      "value": "stopped"
+    },
+    "actions": [
+      {
+        "commandId": "restart_nginx",
+        "params": {},
+        "description": "Restart nginx service",
+        "timeout_seconds": 30
+      }
+    ],
+    "verify": {
+      "metric": "process_status",
+      "operator": "==",
+      "value": "running",
+      "retry_count": 2,
+      "retry_interval_seconds": 10
+    },
+    "requires_approval": false,
+    "required_permission": "execute:restart_service"
+  },
+  "memory_leak": {
+    "description": "Restart OpenClaw gateway to free memory",
+    "condition": {
+      "metric": "memory_usage",
+      "operator": ">",
+      "threshold": 95
+    },
+    "actions": [
+      {
+        "commandId": "openclaw_restart",
+        "params": {},
+        "description": "Restart OpenClaw gateway",
+        "timeout_seconds": 60
+      }
+    ],
+    "verify": {
+      "metric": "memory_usage",
+      "operator": "<",
+      "threshold": 70,
+      "retry_count": 1,
+      "retry_interval_seconds": 30
+    },
+    "requires_approval": true,
+    "approver_role": "admin",
+    "required_permission": "execute:restart_openclaw"
+  },
+  "api_slow": {
+    "description": "Reload nginx to improve API performance",
+    "condition": {
+      "metric": "api_latency_ms",
+      "operator": ">",
+      "threshold": 2000
+    },
+    "actions": [
+      {
+        "commandId": "reload_nginx",
+        "params": {},
+        "description": "Reload nginx configuration",
+        "timeout_seconds": 10
+      }
+    ],
+    "verify": {
+      "metric": "api_latency_ms",
+      "operator": "<",
+      "threshold": 500,
+      "retry_count": 3,
+      "retry_interval_seconds": 30
+    },
+    "requires_approval": false,
+    "required_permission": "execute:reload_nginx"
+  },
+  "ssl_expiring": {
+    "description": "Renew expiring SSL certificate",
+    "condition": {
+      "metric": "ssl_expires_in_days",
+      "operator": "<",
+      "threshold": 7
+    },
+    "actions": [
+      {
+        "commandId": "certbot_renew",
+        "params": {},
+        "description": "Renew SSL certificate",
+        "timeout_seconds": 120
+      },
+      {
+        "commandId": "reload_nginx",
+        "params": {},
+        "description": "Reload nginx to use new certificate",
+        "timeout_seconds": 10
+      }
+    ],
+    "verify": {
+      "metric": "ssl_expires_in_days",
+      "operator": ">",
+      "threshold": 60,
+      "retry_count": 1,
+      "retry_interval_seconds": 0
+    },
+    "requires_approval": false,
+    "required_permission": "execute:ssl_renewal"
+  }
+}

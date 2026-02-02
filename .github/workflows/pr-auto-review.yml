@@ -1,0 +1,300 @@
+name: PR Auto Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+  issues: write
+
+jobs:
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    outputs:
+      eslint-passed: ${{ steps.eslint.outcome == 'success' }}
+      tests-passed: ${{ steps.tests.outcome == 'success' }}
+      coverage-passed: ${{ steps.coverage.outcome == 'success' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        id: eslint
+        run: |
+          npm run lint 2>&1 | tee eslint-output.txt
+          echo "result=$(cat eslint-output.txt)" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Run Tests
+        id: tests
+        run: |
+          npm test -- --coverage --coverageReporters=json-summary 2>&1 | tee test-output.txt
+          echo "result=$(cat test-output.txt)" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Check Coverage
+        id: coverage
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            COVERAGE=$(node -e "console.log(JSON.parse(require('fs').readFileSync('coverage/coverage-summary.json')).total.lines.pct)")
+            echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+            if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+              echo "❌ Coverage $COVERAGE% is below 80% threshold"
+              exit 1
+            else
+              echo "✅ Coverage $COVERAGE% meets threshold"
+            fi
+          else
+            echo "⚠️ No coverage report found"
+            exit 1
+          fi
+        continue-on-error: true
+
+      - name: Comment Results
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const eslintPassed = '${{ steps.eslint.outcome }}' === 'success';
+            const testsPassed = '${{ steps.tests.outcome }}' === 'success';
+            const coveragePassed = '${{ steps.coverage.outcome }}' === 'success';
+            const coverage = '${{ steps.coverage.outputs.coverage }}';
+            
+            const status = (passed) => passed ? '✅' : '❌';
+            
+            const comment = `## 📊 Code Quality Report
+            
+            ${status(eslintPassed)} **ESLint**: ${eslintPassed ? 'Passed' : 'Failed'}
+            ${status(testsPassed)} **Tests**: ${testsPassed ? 'Passed' : 'Failed'}
+            ${status(coveragePassed)} **Coverage**: ${coverage}% ${coveragePassed ? '(≥80%)' : '(<80%)'}
+            
+            ${!eslintPassed || !testsPassed || !coveragePassed ? '⚠️ Some checks failed. Please fix the issues before merging.' : '🎉 All quality checks passed!'}
+            `;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    outputs:
+      audit-passed: ${{ steps.audit.outcome == 'success' }}
+      secrets-passed: ${{ steps.secrets.outcome == 'success' }}
+      injection-passed: ${{ steps.injection.outcome == 'success' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: NPM Audit
+        id: audit
+        run: |
+          npm audit --audit-level=moderate 2>&1 | tee audit-output.txt
+          echo "result=$(cat audit-output.txt)" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Scan for Secrets
+        id: secrets
+        run: |
+          node scripts/security-scanner.js secrets 2>&1 | tee secrets-output.txt
+          echo "result=$(cat secrets-output.txt)" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Check Command Injection Patterns
+        id: injection
+        run: |
+          node scripts/security-scanner.js injection 2>&1 | tee injection-output.txt
+          echo "result=$(cat injection-output.txt)" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Comment Security Results
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const auditPassed = '${{ steps.audit.outcome }}' === 'success';
+            const secretsPassed = '${{ steps.secrets.outcome }}' === 'success';
+            const injectionPassed = '${{ steps.injection.outcome }}' === 'success';
+            
+            const status = (passed) => passed ? '✅' : '❌';
+            
+            const comment = `## 🔒 Security Scan Report
+            
+            ${status(auditPassed)} **NPM Audit**: ${auditPassed ? 'No vulnerabilities' : 'Vulnerabilities found'}
+            ${status(secretsPassed)} **Secret Scan**: ${secretsPassed ? 'No secrets detected' : 'Potential secrets found'}
+            ${status(injectionPassed)} **Injection Check**: ${injectionPassed ? 'No injection patterns' : 'Suspicious patterns found'}
+            
+            ${!auditPassed || !secretsPassed || !injectionPassed ? '🚨 Security issues detected! Please review and fix.' : '🛡️ All security checks passed!'}
+            `;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+  ai-code-review:
+    name: AI Code Review
+    runs-on: ubuntu-latest
+    needs: [code-quality, security-scan]
+    outputs:
+      score: ${{ steps.review.outputs.score }}
+      approved: ${{ steps.review.outputs.approved }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get Changed Files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: |
+            **/*.js
+            **/*.ts
+            **/*.jsx
+            **/*.tsx
+            **/*.json
+            **/*.yml
+            **/*.yaml
+
+      - name: AI Code Review
+        id: review
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          node scripts/pr-reviewer.js \
+            --pr-number=${{ github.event.pull_request.number }} \
+            --files="${{ steps.changed-files.outputs.all_changed_files }}" \
+            --code-quality-passed="${{ needs.code-quality.outputs.eslint-passed }}" \
+            --security-passed="${{ needs.security-scan.outputs.audit-passed }}"
+
+      - name: Read Review Results
+        id: read-results
+        run: |
+          if [ -f review-results.json ]; then
+            SCORE=$(cat review-results.json | jq -r '.score')
+            APPROVED=$(cat review-results.json | jq -r '.approved')
+            echo "score=$SCORE" >> $GITHUB_OUTPUT
+            echo "approved=$APPROVED" >> $GITHUB_OUTPUT
+          else
+            echo "score=0" >> $GITHUB_OUTPUT
+            echo "approved=false" >> $GITHUB_OUTPUT
+          fi
+
+  auto-approve:
+    name: Auto Approve
+    runs-on: ubuntu-latest
+    needs: [code-quality, security-scan, ai-code-review]
+    if: |
+      needs.code-quality.outputs.eslint-passed == 'true' &&
+      needs.code-quality.outputs.tests-passed == 'true' &&
+      needs.code-quality.outputs.coverage-passed == 'true' &&
+      needs.security-scan.outputs.audit-passed == 'true' &&
+      needs.security-scan.outputs.secrets-passed == 'true' &&
+      needs.security-scan.outputs.injection-passed == 'true' &&
+      needs.ai-code-review.outputs.score >= 8 &&
+      !contains(github.event.pull_request.labels.*.name, 'hold')
+    steps:
+      - name: Check Author Allowlist
+        id: check-author
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const allowedAuthors = ['jawsbaek', 'dependabot[bot]'];
+            const author = context.payload.pull_request.user.login;
+            const isAllowed = allowedAuthors.includes(author);
+            
+            console.log(`Author: ${author}, Allowed: ${isAllowed}`);
+            core.setOutput('allowed', isAllowed);
+            
+            return isAllowed;
+
+      - name: Auto Approve PR
+        if: steps.check-author.outputs.allowed == 'true'
+        uses: hmarr/auto-approve-action@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add auto-merge label
+        if: steps.check-author.outputs.allowed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['auto-merge']
+            });
+
+      - name: Comment Approval
+        if: steps.check-author.outputs.allowed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `## ✅ Auto-Approval
+            
+            This PR has been automatically approved based on:
+            - ✅ All code quality checks passed
+            - ✅ All security scans passed
+            - ✅ AI review score: ${{ needs.ai-code-review.outputs.score }}/10
+            - ✅ Author is in allowlist
+            - ✅ No conflicts detected
+            
+            🤖 Ready for auto-merge!
+            
+            _To prevent auto-merge, add the \`hold\` label or comment \`/hold\`_
+            `;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });

@@ -36,8 +36,8 @@
         }
       ],
       "analysis": {
-        "memory_leak_threshold": 0.90,
-        "process_memory_threshold": 0.50
+        "memory_leak_threshold": 0.9,
+        "process_memory_threshold": 0.5
       }
     },
     "high_cpu": {

@@ -3,7 +3,9 @@
  * 시스템 성능 프로파일링 및 병목 지점 분석
  */
 
-const logger = require('../../lib/logger');
+import createLogger from '../../lib/logger.js';
+
+const logger = createLogger('profiler');
 
 class Profiler {
   constructor(sshExecutor) {
@@ -266,18 +268,20 @@ class Profiler {
 
     if (type === 'processes') {
       const lines = output.split('\n').slice(1); // 헤더 제외
-      return lines.map(line => {
-        const parts = line.trim().split(/\s+/);
-        if (parts.length >= 11) {
-          return {
-            user: parts[0],
-            pid: parts[1],
-            cpu: parseFloat(parts[2]),
-            mem: parseFloat(parts[3]),
-            command: parts.slice(10).join(' ')
-          };
-        }
-      }).filter(Boolean);
+      return lines
+        .map((line) => {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length >= 11) {
+            return {
+              user: parts[0],
+              pid: parts[1],
+              cpu: parseFloat(parts[2]),
+              mem: parseFloat(parts[3]),
+              command: parts.slice(10).join(' ')
+            };
+          }
+        })
+        .filter(Boolean);
     }
 
     return output;
@@ -289,33 +293,35 @@ class Profiler {
   parseMemoryData(type, output) {
     if (type === 'free') {
       const lines = output.split('\n');
-      const memLine = lines.find(l => l.startsWith('Mem:'));
+      const memLine = lines.find((l) => l.startsWith('Mem:'));
       if (memLine) {
         const parts = memLine.split(/\s+/);
         return {
-          total: parseInt(parts[1]),
-          used: parseInt(parts[2]),
-          free: parseInt(parts[3]),
-          available: parseInt(parts[6]),
-          usagePercent: ((parseInt(parts[2]) / parseInt(parts[1])) * 100).toFixed(2)
+          total: parseInt(parts[1], 10),
+          used: parseInt(parts[2], 10),
+          free: parseInt(parts[3], 10),
+          available: parseInt(parts[6], 10),
+          usagePercent: ((parseInt(parts[2], 10) / parseInt(parts[1], 10)) * 100).toFixed(2)
         };
       }
     }
 
     if (type === 'processes') {
       const lines = output.split('\n').slice(1);
-      return lines.map(line => {
-        const parts = line.trim().split(/\s+/);
-        if (parts.length >= 11) {
-          return {
-            user: parts[0],
-            pid: parts[1],
-            mem: parseFloat(parts[3]),
-            rss: parseInt(parts[5]),
-            command: parts.slice(10).join(' ')
-          };
-        }
-      }).filter(Boolean);
+      return lines
+        .map((line) => {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length >= 11) {
+            return {
+              user: parts[0],
+              pid: parts[1],
+              mem: parseFloat(parts[3]),
+              rss: parseInt(parts[5], 10),
+              command: parts.slice(10).join(' ')
+            };
+          }
+        })
+        .filter(Boolean);
     }
 
     return output;
@@ -327,19 +333,21 @@ class Profiler {
   parseDiskData(type, output) {
     if (type === 'usage' || type === 'inodes') {
       const lines = output.split('\n').slice(1); // 헤더 제외
-      return lines.map(line => {
-        const parts = line.trim().split(/\s+/);
-        if (parts.length >= 6) {
-          return {
-            filesystem: parts[0],
-            size: parts[1],
-            used: parts[2],
-            available: parts[3],
-            usePercent: parts[4],
-            mountPoint: parts[5]
-          };
-        }
-      }).filter(Boolean);
+      return lines
+        .map((line) => {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length >= 6) {
+            return {
+              filesystem: parts[0],
+              size: parts[1],
+              used: parts[2],
+              available: parts[3],
+              usePercent: parts[4],
+              mountPoint: parts[5]
+            };
+          }
+        })
+        .filter(Boolean);
     }
 
     return output;
@@ -350,7 +358,7 @@ class Profiler {
    */
   parseNetworkData(type, output) {
     if (type === 'listening' || type === 'established') {
-      return parseInt(output.trim()) || 0;
+      return parseInt(output.trim(), 10) || 0;
     }
 
     return output;
@@ -385,7 +393,7 @@ class Profiler {
     // 디스크 병목
     if (profiles.disk?.usage) {
       for (const disk of profiles.disk.usage) {
-        const usage = parseInt(disk.usePercent);
+        const usage = parseInt(disk.usePercent, 10);
         if (usage > 90) {
           bottlenecks.push({
             type: 'disk',
@@ -413,7 +421,7 @@ class Profiler {
   /**
    * 프로파일 비교
    */
-  compareProfiles(target, timestamp1, timestamp2) {
+  compareProfiles(_target, _timestamp1, _timestamp2) {
     // 구현: 두 시점의 프로파일 비교하여 변화 감지
     return {
       compared: true,
@@ -432,4 +440,4 @@ class Profiler {
   }
 }
 
-module.exports = Profiler;
+export default Profiler;

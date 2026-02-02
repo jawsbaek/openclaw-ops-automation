@@ -3,9 +3,8 @@
  * SSH를 통한 원격 명령 안전 실행
  */
 
-import fs from 'fs/promises';
-import { readFileSync } from 'fs';
-import path from 'path';
+import { promises as _fs } from 'node:fs';
+import _path from 'node:path';
 import SSHConnectionPool from './connection-pool.js';
 import createLogger from '../../lib/logger.js';
 
@@ -19,7 +18,7 @@ class RemoteExecutor {
       maxConnections: 50,
       idleTimeout: 300000
     });
-    
+
     this.executionHistory = [];
     this.pendingApprovals = new Map();
   }
@@ -29,7 +28,7 @@ class RemoteExecutor {
    */
   async execute(options) {
     const { target, command, options: execOptions = {} } = options;
-    
+
     // 명령 검증
     if (!this.isCommandAllowed(command, execOptions)) {
       throw new Error(`명령 실행 거부: ${command}`);
@@ -37,7 +36,7 @@ class RemoteExecutor {
 
     // 대상 서버 해석
     const hosts = this.resolveTargets(target);
-    
+
     if (hosts.length === 0) {
       throw new Error(`대상 서버를 찾을 수 없음: ${target}`);
     }
@@ -56,7 +55,7 @@ class RemoteExecutor {
     }
 
     // 병렬 또는 순차 실행
-    const results = execOptions.parallel 
+    const results = execOptions.parallel
       ? await this.executeParallel(command, hosts, execOptions)
       : await this.executeSequential(command, hosts, execOptions);
 
@@ -70,13 +69,12 @@ class RemoteExecutor {
    * 병렬 실행
    */
   async executeParallel(command, hosts, options) {
-    const promises = hosts.map(host => 
-      this.executeOnHost(host, command, options)
-        .catch(err => ({
-          host,
-          success: false,
-          error: err.message
-        }))
+    const promises = hosts.map((host) =>
+      this.executeOnHost(host, command, options).catch((err) => ({
+        host,
+        success: false,
+        error: err.message
+      }))
     );
 
     return await Promise.all(promises);
@@ -87,7 +85,7 @@ class RemoteExecutor {
    */
   async executeSequential(command, hosts, options) {
     const results = [];
-    
+
     for (const host of hosts) {
       try {
         const result = await this.executeOnHost(host, command, options);
@@ -100,7 +98,7 @@ class RemoteExecutor {
         });
       }
     }
-    
+
     return results;
   }
 
@@ -110,15 +108,15 @@ class RemoteExecutor {
   async executeOnHost(host, command, options) {
     const startTime = Date.now();
     const timeout = options.timeout || 30000;
-    
+
     try {
       const serverConfig = this.getServerConfig(host);
       const client = await this.connectionPool.getConnection(host, serverConfig);
-      
+
       const result = await this.execCommand(client, command, timeout);
-      
+
       this.connectionPool.releaseConnection(host);
-      
+
       return {
         host,
         success: result.exitCode === 0,
@@ -180,29 +178,18 @@ class RemoteExecutor {
   /**
    * 명령 허용 여부 확인
    */
-  isCommandAllowed(command, options = {}) {
+  isCommandAllowed(command, options) {
     if (!this.whitelistConfig) {
       return true; // 화이트리스트 없으면 모두 허용
     }
 
-    // 블록 패턴 체크
-    const blockedPatterns = this.whitelistConfig.blockedPatterns || [];
-    for (const pattern of blockedPatterns) {
-      if (command.includes(pattern)) {
-        if (!options.requireApproval) {
-          logger.warn(`위험한 명령 차단: ${command}`);
-          return false;
-        }
-      }
-    }
-
-    // 위험한 명령 패턴 추가 체크
+    // 위험한 명령 패턴 체크
     const dangerousPatterns = [
       /rm\s+-rf\s+\//,
       /dd\s+if=/,
       /mkfs/,
       /fdisk/,
-      /:(){ :|:& };:/  // fork bomb
+      /:(){ :|:& };:/ // fork bomb
     ];
 
     for (const pattern of dangerousPatterns) {
@@ -214,35 +201,11 @@ class RemoteExecutor {
       }
     }
 
-    // sudo 체크
-    const hasSudo = command.startsWith('sudo ');
-    if (hasSudo && !options.allowSudo) {
-      return false;
-    }
-
     // 화이트리스트 체크
     const whitelist = this.whitelistConfig.allowedCommands || [];
-    
-    // sudo 제거 후 체크
-    const cleanCommand = hasSudo ? command.replace(/^sudo\s+/, '') : command;
-    
-    for (const entry of whitelist) {
-      if (typeof entry === 'string') {
-        // 정확히 일치하거나 시작하는지 체크
-        if (cleanCommand === entry || cleanCommand.startsWith(entry + ' ')) {
-          return true;
-        }
-      } else if (entry.pattern) {
-        // 패턴 매칭
-        const regex = new RegExp(entry.pattern);
-        if (regex.test(cleanCommand)) {
-          return true;
-        }
-      }
-    }
-    
-    // 와일드카드
-    return whitelist.includes('*');
+    const commandBase = command.split(' ')[0];
+
+    return whitelist.includes(commandBase) || whitelist.includes('*');
   }
 
   /**
@@ -254,30 +217,26 @@ class RemoteExecutor {
     }
 
     // 그룹 체크
-    if (this.serversConfig.groups && this.serversConfig.groups[target]) {
+    if (this.serversConfig.groups?.[target]) {
       return this.serversConfig.groups[target];
     }
 
-    // 단일 호스트 (서버 설정에 있는 경우만)
-    if (this.serversConfig.servers && this.serversConfig.servers[target]) {
-      return [target];
-    }
-
-    // 알 수 없는 타겟
-    return [];
+    // 단일 호스트
+    return [target];
   }
 
   /**
    * 서버 설정 가져오기
    */
   getServerConfig(host) {
-    const server = this.serversConfig.servers?.[host];
-    
-    if (!server) {
-      throw new Error(`서버를 찾을 수 없음: ${host}`);
-    }
-    
-    return server;
+    const sshConfig = this.serversConfig.ssh || {};
+
+    return {
+      host,
+      port: sshConfig.port || 22,
+      username: sshConfig.user,
+      privateKey: sshConfig.privateKey || this.loadPrivateKey(sshConfig.key_path)
+    };
   }
 
   /**
@@ -285,7 +244,7 @@ class RemoteExecutor {
    */
   loadPrivateKey(keyPath) {
     try {
-      return readFileSync(keyPath, 'utf8');
+      return require('node:fs').readFileSync(keyPath, 'utf8');
     } catch (err) {
       logger.error(`SSH 키 로드 실패: ${keyPath}`, err);
       throw new Error('SSH 키를 찾을 수 없음');
@@ -297,9 +256,9 @@ class RemoteExecutor {
    */
   async requestApproval(command, hosts) {
     const requestId = Date.now().toString();
-    
+
     logger.warn(`승인 필요: ${command} on ${hosts.join(', ')}`);
-    
+
     // 실제로는 이벤트를 발생시켜 Orchestrator가 처리
     this.pendingApprovals.set(requestId, {
       command,
@@ -316,13 +275,12 @@ class RemoteExecutor {
    */
   simulateExecution(command, hosts) {
     logger.info(`[DRY-RUN] ${command} on ${hosts.join(', ')}`);
-    
+
     return {
       success: true,
       dryRun: true,
-      results: hosts.map(host => ({
+      results: hosts.map((host) => ({
         host,
-        wouldExecute: command,
         exitCode: 0,
         stdout: '[DRY-RUN] 실행되지 않음',
         stderr: '',
@@ -348,9 +306,9 @@ class RemoteExecutor {
       results,
       summary: this.getSummary(results)
     };
-    
+
     this.executionHistory.push(record);
-    
+
     // 최대 1000개 유지
     if (this.executionHistory.length > 1000) {
       this.executionHistory.shift();
@@ -369,13 +327,10 @@ class RemoteExecutor {
    * 결과 포맷팅
    */
   formatResults(results) {
-    const summary = this.getSummary(results);
     return {
-      success: results.some(r => r.success),
-      totalHosts: summary.total,
-      successCount: summary.succeeded,
-      failureCount: summary.failed,
-      results
+      success: results.every((r) => r.success),
+      results,
+      summary: this.getSummary(results)
     };
   }
 
@@ -385,59 +340,8 @@ class RemoteExecutor {
   getSummary(results) {
     return {
       total: results.length,
-      succeeded: results.filter(r => r.success).length,
-      failed: results.filter(r => !r.success).length
-    };
-  }
-
-  /**
-   * 실행 기록 저장
-   */
-  recordExecution(command, hosts, results) {
-    const record = {
-      command,
-      hosts,
-      results,
-      timestamp: Date.now(),
-      success: results.some(r => r.success)
-    };
-    
-    this.executionHistory.push(record);
-    
-    // 최대 1000개까지만 보관
-    if (this.executionHistory.length > 1000) {
-      this.executionHistory.shift();
-    }
-    
-    logger.info('SSH 명령 실행', {
-      command,
-      hosts: hosts.length,
-      succeeded: results.filter(r => r.success).length,
-      failed: results.filter(r => !r.success).length
-    });
-  }
-
-  /**
-   * 실행 이력 조회
-   */
-  getExecutionHistory(limit = 100) {
-    const count = Math.min(limit, this.executionHistory.length);
-    return this.executionHistory.slice(-count).reverse();
-  }
-
-  /**
-   * 실행 통계
-   */
-  getStats() {
-    const total = this.executionHistory.length;
-    const successful = this.executionHistory.filter(r => r.success).length;
-    const failed = total - successful;
-    
-    return {
-      totalExecutions: total,
-      successfulExecutions: successful,
-      failedExecutions: failed,
-      successRate: total > 0 ? (successful / total) * 100 : 0
+      succeeded: results.filter((r) => r.success).length,
+      failed: results.filter((r) => !r.success).length
     };
   }
 

@@ -3,11 +3,11 @@
  * @module agents/reporter
  */
 
-import { readdirSync, readFileSync, existsSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { getRecentMetrics, saveReport } from '../lib/file-utils.js';
 import { createLogger } from '../lib/logger.js';
-import { saveReport, getRecentMetrics } from '../lib/file-utils.js';
 
 const logger = createLogger('reporter');
 
@@ -46,7 +46,7 @@ function analyzeMetricsTrends(metricsArray) {
   const memoryValues = [];
   const diskValues = [];
 
-  metricsArray.forEach(m => {
+  metricsArray.forEach((m) => {
     if (m.system?.cpu) cpuValues.push(m.system.cpu);
     if (m.system?.memory?.percentage) memoryValues.push(m.system.memory.percentage);
     if (m.system?.disk?.[0]?.percentage) diskValues.push(m.system.disk[0].percentage);
@@ -69,24 +69,24 @@ function getRecentIncidents(hours = 24) {
   const incidentsDir = join(baseDir, 'incidents');
   if (!existsSync(incidentsDir)) return [];
 
-  const cutoffTime = Date.now() - (hours * 60 * 60 * 1000);
+  const _cutoffTime = Date.now() - hours * 60 * 60 * 1000;
   const incidents = [];
 
   try {
     const files = readdirSync(incidentsDir)
-      .filter(f => f.endsWith('.md'))
+      .filter((f) => f.endsWith('.md'))
       .sort()
       .reverse();
 
     for (const file of files) {
       const filepath = join(incidentsDir, file);
       const content = readFileSync(filepath, 'utf8');
-      
+
       // Extract incident info from markdown
       const titleMatch = content.match(/# Incident Report: (.+)/);
       const statusMatch = content.match(/\*\*Status:\*\* (.+)/);
       const scenarioMatch = content.match(/\*\*Scenario:\*\* (.+)/);
-      
+
       incidents.push({
         id: titleMatch?.[1] || 'unknown',
         filename: file,
@@ -107,28 +107,28 @@ function getRecentIncidents(hours = 24) {
  * @param {number} hours - Look back N hours
  * @returns {Array} Array of analysis summaries
  */
-function getRecentAnalyses(hours = 24) {
+function getRecentAnalyses(_hours = 24) {
   const analysisDir = join(baseDir, 'analysis');
   if (!existsSync(analysisDir)) return [];
 
   try {
     const files = readdirSync(analysisDir)
-      .filter(f => f.endsWith('.md'))
+      .filter((f) => f.endsWith('.md'))
       .sort()
       .reverse()
       .slice(0, 5); // Last 5 analyses
 
-    return files.map(file => {
+    return files.map((file) => {
       const filepath = join(analysisDir, file);
       const content = readFileSync(filepath, 'utf8');
-      
+
       const totalMatch = content.match(/\*\*Total Issues Found:\*\* (\d+)/);
       const criticalMatch = content.match(/Critical: (\d+)/);
-      
+
       return {
         filename: file,
-        totalIssues: parseInt(totalMatch?.[1] || '0'),
-        criticalIssues: parseInt(criticalMatch?.[1] || '0')
+        totalIssues: parseInt(totalMatch?.[1] || '0', 10),
+        criticalIssues: parseInt(criticalMatch?.[1] || '0', 10)
       };
     });
   } catch (error) {
@@ -194,36 +194,36 @@ export async function generateDailyReport() {
     report += `## Log Analysis Summary\n\n`;
     const totalIssues = analyses.reduce((sum, a) => sum + a.totalIssues, 0);
     const totalCritical = analyses.reduce((sum, a) => sum + a.criticalIssues, 0);
-    
+
     report += `- **Total Issues Detected:** ${totalIssues}\n`;
     report += `- **Critical Issues:** ${totalCritical}\n\n`;
   }
 
   // Recommendations
   report += `## Recommendations\n\n`;
-  
+
   if (trends.cpu.max > 90) {
     report += `- 🔴 **CPU**: Peak usage exceeded 90%. Consider scaling or optimization.\n`;
   }
-  
+
   if (trends.memory.max > 90) {
     report += `- 🔴 **Memory**: High memory usage detected. Monitor for leaks.\n`;
   }
-  
+
   if (trends.disk.max > 85) {
     report += `- 🟡 **Disk**: Disk usage approaching threshold. Schedule cleanup.\n`;
   }
-  
+
   if (incidents.length > 5) {
     report += `- ⚠️ **Incidents**: High incident count (${incidents.length}). Investigate root causes.\n`;
   }
-  
+
   if (trends.cpu.max < 70 && trends.memory.max < 70 && incidents.length === 0) {
     report += `- ✅ **All Systems Nominal**: No action required.\n`;
   }
 
   const reportPath = saveReport('daily', report);
-  
+
   logger.info('Daily report generated', { reportPath, incidents: incidents.length });
 
   return {
@@ -256,15 +256,15 @@ export async function generateWeeklyReport() {
   report += `## Summary\n\n`;
   report += `- **Uptime Metrics:** ${metrics.length} collections\n`;
   report += `- **Total Incidents:** ${incidents.length}\n`;
-  report += `- **Resolved Incidents:** ${incidents.filter(i => i.status.includes('Resolved')).length}\n\n`;
+  report += `- **Resolved Incidents:** ${incidents.filter((i) => i.status.includes('Resolved')).length}\n\n`;
 
   report += `## Performance Trends\n\n`;
   report += `### CPU\n`;
   report += `- Min: ${trends.cpu.min.toFixed(2)}% | Max: ${trends.cpu.max.toFixed(2)}% | Avg: ${trends.cpu.avg.toFixed(2)}%\n\n`;
-  
+
   report += `### Memory\n`;
   report += `- Min: ${trends.memory.min.toFixed(2)}% | Max: ${trends.memory.max.toFixed(2)}% | Avg: ${trends.memory.avg.toFixed(2)}%\n\n`;
-  
+
   report += `### Disk\n`;
   report += `- Min: ${trends.disk.min.toFixed(2)}% | Max: ${trends.disk.max.toFixed(2)}% | Avg: ${trends.disk.avg.toFixed(2)}%\n\n`;
 
@@ -274,7 +274,7 @@ export async function generateWeeklyReport() {
   });
 
   const reportPath = saveReport('weekly', report);
-  
+
   logger.info('Weekly report generated', { reportPath });
 
   return {
@@ -311,11 +311,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const reportType = process.argv[2] || 'daily';
 
   generateReport(reportType)
-    .then(result => {
+    .then((result) => {
       logger.info('Report generation completed', result);
       process.exit(0);
     })
-    .catch(error => {
+    .catch((error) => {
       logger.error('Report generation failed', { error: error.message, stack: error.stack });
       process.exit(1);
     });

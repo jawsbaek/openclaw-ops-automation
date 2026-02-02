@@ -2,18 +2,18 @@
  * @fileoverview Tests for Alert Handler Agent
  */
 
-import { processAlerts, handleAlert } from '../../agents/alert-handler.js';
+import { handleAlert, processAlerts } from '../../agents/alert-handler.js';
 
 describe('Alert Handler', () => {
   test('processAlerts returns an array', async () => {
     const alerts = await processAlerts();
-    
+
     expect(Array.isArray(alerts)).toBe(true);
   });
 
   test('alerts have required properties', async () => {
     const alerts = await processAlerts();
-    
+
     if (alerts.length > 0) {
       const alert = alerts[0];
       expect(alert).toHaveProperty('id');
@@ -35,7 +35,7 @@ describe('Alert Handler', () => {
     };
 
     const result = await handleAlert(testAlert);
-    
+
     expect(result).toBeDefined();
     expect(result).toHaveProperty('alertId');
     expect(result).toHaveProperty('actions');
@@ -54,7 +54,7 @@ describe('Alert Handler', () => {
     };
 
     const result = await handleAlert(criticalAlert);
-    
+
     expect(result.actions).toContain('logged');
     expect(result.actions).toContain('notified');
   });
@@ -70,7 +70,7 @@ describe('Alert Handler', () => {
     };
 
     const result = await handleAlert(autoHealAlert);
-    
+
     expect(result.autoHealRequested).toBe(true);
     expect(result.actions).toContain('autoheal_triggered');
   });

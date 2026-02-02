@@ -82,14 +82,37 @@ openclaw-ops-automation/
 
 ## Coding Standards
 
+### Code Quality Tools
+
+This project uses [Biome](https://biomejs.dev/) for fast linting and formatting:
+
+```bash
+# Check for issues
+npm run lint
+
+# Auto-fix issues
+npm run lint:fix
+
+# Format code
+npm run format
+
+# Check formatting without changes
+npm run format:check
+
+# Run all checks (format + lint + test)
+npm run check
+```
+
 ### JavaScript Style Guide
 
 - Use ES6+ features (modules, async/await, destructuring, etc.)
-- Use 2 spaces for indentation
-- Use single quotes for strings
-- Add semicolons
+- Use 2 spaces for indentation (enforced by Biome)
+- Use single quotes for strings (enforced by Biome)
+- Add semicolons (enforced by Biome)
+- Maximum line length: 100 characters (enforced by Biome)
 - Use meaningful variable and function names
 - Add JSDoc comments for all public functions
+- Imports are automatically organized by Biome
 
 ### Example
 

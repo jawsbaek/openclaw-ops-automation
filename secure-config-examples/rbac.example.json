@@ -1,0 +1,82 @@
+{
+  "roles": {
+    "viewer": {
+      "description": "Read-only access to metrics, logs, and reports",
+      "permissions": ["read:metrics", "read:logs", "read:reports", "read:incidents", "read:dashboard"]
+    },
+    "operator": {
+      "description": "Can execute safe commands and spawn monitoring agents",
+      "permissions": [
+        "read:*",
+        "execute:disk_cleanup",
+        "execute:docker_prune",
+        "execute:reload_nginx",
+        "execute:ssl_renewal",
+        "spawn:metrics-collector",
+        "spawn:logs-analyzer",
+        "spawn:reporter"
+      ]
+    },
+    "incident_responder": {
+      "description": "Can handle incidents and execute remediation",
+      "permissions": [
+        "read:*",
+        "execute:safe_commands",
+        "execute:restart_service",
+        "spawn:autoheal",
+        "spawn:alert-handler",
+        "approve:safe_actions"
+      ]
+    },
+    "admin": {
+      "description": "Full access to all operations including destructive actions",
+      "permissions": ["*"]
+    }
+  },
+  "assignments": {
+    "agent:metrics-collector": ["operator"],
+    "agent:logs-analyzer": ["operator"],
+    "agent:alert-handler": ["incident_responder"],
+    "agent:autoheal": ["incident_responder"],
+    "agent:reporter": ["viewer"],
+    "agent:orchestrator": ["admin"],
+    "user:admin": ["admin"],
+    "user:oncall": ["incident_responder"],
+    "user:developer": ["operator"],
+    "user:auditor": ["viewer"]
+  },
+  "policies": {
+    "approval_required": {
+      "description": "Actions that require manual approval",
+      "actions": ["execute:restart_openclaw", "execute:database_operations", "execute:destructive_cleanup"],
+      "approvers": ["admin"]
+    },
+    "audit_required": {
+      "description": "Actions that must be logged to audit trail",
+      "actions": ["execute:*", "spawn:autoheal", "approve:*", "rbac:*"]
+    },
+    "rate_limits": {
+      "description": "Rate limits per role",
+      "limits": {
+        "viewer": {
+          "read:metrics": 1000,
+          "read:logs": 100
+        },
+        "operator": {
+          "execute:*": 50,
+          "spawn:*": 20
+        },
+        "incident_responder": {
+          "execute:*": 100,
+          "spawn:*": 50
+        }
+      }
+    }
+  },
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2026-02-02",
+    "updated_by": "security-review",
+    "notes": "Initial RBAC configuration - review and customize for your organization"
+  }
+}
