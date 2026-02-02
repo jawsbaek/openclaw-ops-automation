@@ -17,7 +17,7 @@ jobs:
     name: Code Quality Checks
     runs-on: ubuntu-latest
     outputs:
-      eslint-passed: ${{ steps.eslint.outcome == 'success' }}
+      lint-passed: ${{ steps.eslint.outcome == 'success' }}
       tests-passed: ${{ steps.tests.outcome == 'success' }}
       coverage-passed: ${{ steps.coverage.outcome == 'success' }}
     steps:
@@ -36,11 +36,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run ESLint
+      - name: Run Biome Lint
         id: eslint
         run: |
-          npm run lint 2>&1 | tee eslint-output.txt
-          echo "result=$(cat eslint-output.txt)" >> $GITHUB_OUTPUT
+          npm run lint 2>&1 | tee lint-output.txt
+          echo "result=$(cat lint-output.txt)" >> $GITHUB_OUTPUT
         continue-on-error: true
 
       - name: Run Tests
@@ -72,20 +72,20 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const eslintPassed = '${{ steps.eslint.outcome }}' === 'success';
+            const lintPassed = '${{ steps.eslint.outcome }}' === 'success';
             const testsPassed = '${{ steps.tests.outcome }}' === 'success';
             const coveragePassed = '${{ steps.coverage.outcome }}' === 'success';
             const coverage = '${{ steps.coverage.outputs.coverage }}';
-            
+
             const status = (passed) => passed ? '✅' : '❌';
-            
+
             const comment = `## 📊 Code Quality Report
-            
-            ${status(eslintPassed)} **ESLint**: ${eslintPassed ? 'Passed' : 'Failed'}
+
+            ${status(lintPassed)} **Biome Lint**: ${lintPassed ? 'Passed' : 'Failed'}
             ${status(testsPassed)} **Tests**: ${testsPassed ? 'Passed' : 'Failed'}
             ${status(coveragePassed)} **Coverage**: ${coverage}% ${coveragePassed ? '(≥15%)' : '(<15%)'}
             
-            ${!eslintPassed || !testsPassed || !coveragePassed ? '⚠️ Some checks failed. Please fix the issues before merging.' : '🎉 All quality checks passed!'}
+            ${!lintPassed || !testsPassed || !coveragePassed ? '⚠️ Some checks failed. Please fix the issues before merging.' : '🎉 All quality checks passed!'}
             `;
             
             await github.rest.issues.createComment({
@@ -207,7 +207,7 @@ jobs:
 
       - name: Debug Outputs
         run: |
-          echo "ESLint passed: ${{ needs.code-quality.outputs.eslint-passed }}"
+          echo "Lint passed: ${{ needs.code-quality.outputs.lint-passed }}"
           echo "Tests passed: ${{ needs.code-quality.outputs.tests-passed }}"
           echo "Coverage passed: ${{ needs.code-quality.outputs.coverage-passed }}"
 
@@ -221,7 +221,7 @@ jobs:
           node scripts/pr-reviewer.js \
             --pr-number=${{ github.event.pull_request.number }} \
             --files="${{ steps.changed-files.outputs.all_changed_files }}" \
-            --code-quality-passed="${{ needs.code-quality.outputs.eslint-passed }}" \
+            --code-quality-passed="${{ needs.code-quality.outputs.lint-passed }}" \
             --security-passed="${{ needs.security-scan.outputs.audit-passed }}"
 
       - name: Read Review Results
@@ -242,7 +242,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [code-quality, security-scan, ai-code-review]
     if: |
-      needs.code-quality.outputs.eslint-passed == 'true' &&
+      needs.code-quality.outputs.lint-passed == 'true' &&
       needs.code-quality.outputs.tests-passed == 'true' &&
       needs.code-quality.outputs.coverage-passed == 'true' &&
       needs.security-scan.outputs.audit-passed == 'true' &&
