@@ -1,0 +1,50 @@
+{
+  "enabled": false,
+  "baseUrl": "https://your-domain.atlassian.net",
+  "serviceDeskId": "1",
+  "requestTypeId": "10001",
+  "auth": {
+    "type": "basic",
+    "email": "${JSM_EMAIL}",
+    "apiToken": "${JSM_API_TOKEN}"
+  },
+  "issueTypeMapping": {
+    "critical": "Incident",
+    "high": "Incident",
+    "medium": "Service Request",
+    "low": "Service Request"
+  },
+  "priorityMapping": {
+    "critical": "Highest",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "transitionMapping": {
+    "open": "10",
+    "inProgress": "21",
+    "resolved": "31",
+    "closed": "41"
+  },
+  "customFields": {
+    "alertId": "customfield_10100",
+    "autoHealAttempted": "customfield_10101",
+    "autoHealResult": "customfield_10102",
+    "affectedSystem": "customfield_10103",
+    "metricValue": "customfield_10104"
+  },
+  "labels": {
+    "autoHealSuccess": "autoheal-resolved",
+    "autoHealFailed": "autoheal-failed",
+    "manualIntervention": "manual-required"
+  },
+  "webhookSecret": "${JSM_WEBHOOK_SECRET}",
+  "rateLimiting": {
+    "maxRequestsPerMinute": 50,
+    "retryAfterMs": 1000
+  },
+  "deduplication": {
+    "enabled": true,
+    "windowMinutes": 30
+  }
+}
