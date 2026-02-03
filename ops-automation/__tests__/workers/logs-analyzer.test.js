@@ -30,7 +30,7 @@ vi.mock('../../lib/file-utils.js', () => ({
 }));
 
 // Now import the module under test
-const { analyzeLogs } = await import('../../agents/logs-analyzer.js');
+const { analyzeLogs } = await import('../../workers/logs-analyzer.js');
 
 describe('Logs Analyzer', () => {
   beforeEach(() => {

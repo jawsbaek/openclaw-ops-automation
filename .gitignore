@@ -1,10 +1,15 @@
-# Runtime
-metrics/
-analysis/
-incidents/
-reports/
+# Runtime - Generated data (exclude from git but keep directories)
+metrics/*
+!metrics/.gitkeep
+analysis/*
+!analysis/.gitkeep
+incidents/*
+!incidents/.gitkeep
+reports/*
+!reports/.gitkeep
 status/
-logs/
+logs/*
+!logs/.gitkeep
 
 # Sensitive - Never commit secrets!
 *.key

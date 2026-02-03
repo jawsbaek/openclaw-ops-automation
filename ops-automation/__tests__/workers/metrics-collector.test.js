@@ -54,7 +54,7 @@ vi.mock('../../lib/logger.js', () => ({
 }));
 
 const axios = (await import('axios')).default;
-const { collectMetrics } = await import('../../agents/metrics-collector.js');
+const { collectMetrics } = await import('../../workers/metrics-collector.js');
 
 describe('Metrics Collector', () => {
   beforeEach(() => {
