@@ -14,31 +14,31 @@ vi.mock('../../lib/logger.js', () => ({
   }))
 }));
 
-vi.mock('../../agents/metrics-collector.js', () => ({
+vi.mock('../../workers/metrics-collector.js', () => ({
   default: vi.fn()
 }));
 
-vi.mock('../../agents/logs-analyzer.js', () => ({
+vi.mock('../../workers/logs-analyzer.js', () => ({
   default: vi.fn()
 }));
 
-vi.mock('../../agents/alert-handler.js', () => ({
+vi.mock('../../workers/alert-handler.js', () => ({
   run: vi.fn()
 }));
 
-vi.mock('../../agents/reporter.js', () => ({
+vi.mock('../../workers/reporter.js', () => ({
   default: vi.fn()
 }));
 
 // Import mocked modules
 const { createLogger } = await import('../../lib/logger.js');
-const collectMetrics = (await import('../../agents/metrics-collector.js')).default;
-const analyzeLogs = (await import('../../agents/logs-analyzer.js')).default;
-const { run: runAlertHandler } = await import('../../agents/alert-handler.js');
-const generateReport = (await import('../../agents/reporter.js')).default;
+const collectMetrics = (await import('../../workers/metrics-collector.js')).default;
+const analyzeLogs = (await import('../../workers/logs-analyzer.js')).default;
+const { run: runAlertHandler } = await import('../../workers/alert-handler.js');
+const generateReport = (await import('../../workers/reporter.js')).default;
 
 // Import orchestrator AFTER mocks are set up
-const { heartbeat, start } = await import('../../agents/orchestrator.js');
+const { heartbeat, start } = await import('../../workers/orchestrator.js');
 
 describe('Orchestrator Agent', () => {
   let mockLogger;

@@ -27,7 +27,7 @@ vi.mock('../../lib/logger.js', () => ({
 }));
 
 // Import after mocking
-const { generateReport, generateDailyReport, generateWeeklyReport } = await import('../../agents/reporter.js');
+const { generateReport, generateDailyReport, generateWeeklyReport } = await import('../../workers/reporter.js');
 
 describe('Reporter Agent', () => {
   beforeAll(() => {

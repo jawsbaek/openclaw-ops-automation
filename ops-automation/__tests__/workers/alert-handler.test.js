@@ -67,7 +67,7 @@ describe('Alert Handler', () => {
     const configLoader = await import('../../lib/config-loader.js');
     const fileUtils = await import('../../lib/file-utils.js');
     const jsmIntegration = await import('../../src/jsm/jsm-integration.js');
-    const alertHandler = await import('../../agents/alert-handler.js');
+    const alertHandler = await import('../../workers/alert-handler.js');
 
     loadAlertThresholds = configLoader.loadAlertThresholds;
     getLatestMetrics = fileUtils.getLatestMetrics;

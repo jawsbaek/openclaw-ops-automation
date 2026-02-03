@@ -37,7 +37,7 @@ vi.mock('../../lib/logger.js', () => ({
 }));
 
 // Import after mocking
-const { heal } = await import('../../agents/autoheal.js');
+const { heal } = await import('../../workers/autoheal.js');
 
 describe('AutoHeal Agent', () => {
   beforeEach(() => {
