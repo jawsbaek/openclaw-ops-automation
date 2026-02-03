@@ -23,16 +23,14 @@ echo ""
 echo "📦 Installing dependencies..."
 cd "$REPO_DIR"
 
-if command -v pnpm &> /dev/null; then
-    echo "   Using pnpm..."
-    pnpm install
-elif command -v npm &> /dev/null; then
-    echo "   Using npm..."
-    npm install
-else
-    echo "❌ Error: Neither npm nor pnpm found."
+if ! command -v pnpm &> /dev/null; then
+    echo "❌ Error: pnpm not found. Please install pnpm first:"
+    echo "   npm install -g pnpm"
     exit 1
 fi
+
+echo "   Using pnpm..."
+pnpm install
 
 echo "✅ Dependencies installed"
 
@@ -59,14 +57,14 @@ echo ""
 echo "🧪 Testing workers..."
 
 echo "   Testing metrics collector..."
-if npm run worker:metrics &> /dev/null; then
+if pnpm run worker:metrics &> /dev/null; then
     echo "   ✅ Metrics worker OK"
 else
     echo "   ⚠️  Metrics worker test failed (may need config)"
 fi
 
 echo "   Testing logs analyzer..."
-if npm run worker:logs &> /dev/null; then
+if pnpm run worker:logs &> /dev/null; then
     echo "   ✅ Logs analyzer OK"
 else
     echo "   ⚠️  Logs analyzer test failed (may need config)"
@@ -107,9 +105,9 @@ cat <<EOF
 
 3. Test workers manually:
    
-   npm run worker:metrics   # Collect metrics
-   npm run worker:logs      # Analyze logs
-   npm run worker:reporter  # Generate report
+   pnpm run worker:metrics   # Collect metrics
+   pnpm run worker:logs      # Analyze logs
+   pnpm run worker:reporter  # Generate report
 
 4. Use as OpenClaw skill:
    

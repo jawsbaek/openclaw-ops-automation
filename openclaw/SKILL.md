@@ -10,7 +10,7 @@ Use this skill to monitor infrastructure, collect system metrics, and automate o
 cd ~/.openclaw/workspace
 git clone https://github.com/jawsbaek/openclaw-ops-automation.git ops-monitoring
 cd ops-monitoring
-npm install
+pnpm install
 bash openclaw/deploy.sh
 ```
 
@@ -26,7 +26,7 @@ This will:
 ### Collect Current Metrics
 
 ```bash
-cd ~/.openclaw/workspace/ops-monitoring && npm run worker:metrics
+cd ~/.openclaw/workspace/ops-monitoring && pnpm run worker:metrics
 ```
 
 **Output**: `metrics/metrics-YYYY-MM-DD-HHmmss.json`
@@ -49,7 +49,7 @@ cd ~/.openclaw/workspace/ops-monitoring && npm run worker:metrics
 ### Analyze Recent Logs
 
 ```bash
-cd ~/.openclaw/workspace/ops-monitoring && npm run worker:logs
+cd ~/.openclaw/workspace/ops-monitoring && pnpm run worker:logs
 ```
 
 **Output**: `analysis/log-insights-YYYY-MM-DD-HHmmss.md`
@@ -70,7 +70,7 @@ cd ~/.openclaw/workspace/ops-monitoring && npm run worker:logs
 ### Generate Daily Report
 
 ```bash
-cd ~/.openclaw/workspace/ops-monitoring && npm run worker:reporter
+cd ~/.openclaw/workspace/ops-monitoring && pnpm run worker:reporter
 ```
 
 **Output**: `reports/ops-report-YYYY-MM-DD.md`
@@ -91,7 +91,7 @@ cd ~/.openclaw/workspace/ops-monitoring && npm run worker:reporter
 ### Handle Alerts
 
 ```bash
-cd ~/.openclaw/workspace/ops-monitoring && npm run worker:alert
+cd ~/.openclaw/workspace/ops-monitoring && pnpm run worker:alert
 ```
 
 **When to use**:
@@ -103,7 +103,7 @@ cd ~/.openclaw/workspace/ops-monitoring && npm run worker:alert
 ### Auto-Heal Issues
 
 ```bash
-cd ~/.openclaw/workspace/ops-monitoring && npm run worker:autoheal
+cd ~/.openclaw/workspace/ops-monitoring && pnpm run worker:autoheal
 ```
 
 **When to use**:
@@ -167,7 +167,7 @@ This will show you commands to register cron jobs in OpenClaw:
 **Your response**:
 1. Run metrics collection:
    ```bash
-   cd ~/.openclaw/workspace/ops-monitoring && npm run worker:metrics
+   cd ~/.openclaw/workspace/ops-monitoring && pnpm run worker:metrics
    ```
 2. Read the latest metrics file
 3. Summarize key points:
@@ -198,7 +198,7 @@ This will show you commands to register cron jobs in OpenClaw:
 1. Check if daily report exists for today
 2. If not, generate it:
    ```bash
-   npm run worker:reporter
+   pnpm run worker:reporter
    ```
 3. Read the report
 4. Summarize key points for user:
@@ -215,7 +215,7 @@ This will show you commands to register cron jobs in OpenClaw:
    ```
 2. If >10 minutes old:
    - Alert: "Metrics collection may be stuck"
-   - Manually run: `npm run worker:metrics`
+   - Manually run: `pnpm run worker:metrics`
 
 3. Check for critical alerts:
    ```bash
@@ -317,14 +317,14 @@ ops-monitoring/
 npm list
 
 # Reinstall
-npm install
+pnpm install
 ```
 
 ### No metrics collected
 
 ```bash
 # Run manually with debug
-DEBUG=* npm run worker:metrics
+DEBUG=* pnpm run worker:metrics
 ```
 
 ### Cron jobs not firing

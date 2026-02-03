@@ -40,7 +40,7 @@ Main coordinator that schedules and manages other workers.
 
 **Usage**:
 ```bash
-npm run worker:orchestrator
+pnpm run worker:orchestrator
 ```
 
 ### metrics-collector.js
@@ -48,7 +48,7 @@ Collects system metrics (CPU, Memory, Disk, Network).
 
 **Usage**:
 ```bash
-npm run worker:metrics
+pnpm run worker:metrics
 ```
 
 **Output**: `metrics/metrics-YYYY-MM-DD-HHmmss.json`
@@ -58,7 +58,7 @@ Analyzes logs for patterns, errors, and anomalies.
 
 **Usage**:
 ```bash
-npm run worker:logs
+pnpm run worker:logs
 ```
 
 **Output**: `analysis/log-insights-YYYY-MM-DD-HHmmss.md`
@@ -68,7 +68,7 @@ Processes and triages alerts from monitoring systems.
 
 **Usage**:
 ```bash
-npm run worker:alert
+pnpm run worker:alert
 ```
 
 ### autoheal.js
@@ -76,7 +76,7 @@ Executes automated remediation playbooks.
 
 **Usage**:
 ```bash
-npm run worker:autoheal
+pnpm run worker:autoheal
 ```
 
 **Output**: `incidents/YYYY-MM-DD-{incident_id}.md`
@@ -86,7 +86,7 @@ Generates daily and weekly operational reports.
 
 **Usage**:
 ```bash
-npm run worker:reporter
+pnpm run worker:reporter
 ```
 
 **Output**: `reports/ops-report-YYYY-MM-DD.md`
@@ -181,14 +181,14 @@ All modules have corresponding test suites in `__tests__/`.
 
 **Run tests**:
 ```bash
-npm test                  # Run all tests
-npm test -- --watch       # Watch mode
-npm run test:ui           # UI mode (Vitest)
+pnpm test                  # Run all tests
+pnpm test -- --watch       # Watch mode
+pnpm run test:ui           # UI mode (Vitest)
 ```
 
 **Test coverage**:
 ```bash
-npm test -- --coverage
+pnpm test -- --coverage
 ```
 
 ---
@@ -230,7 +230,7 @@ See `../SECURITY.md` for security guidelines.
 
 - **AI Agents**: See `../openclaw/AGENTS.md`
 - **OpenClaw Skill**: See `../openclaw/SKILL.md`
-- **API Reference**: Run `npm run docs` (JSDoc)
+- **API Reference**: Run `pnpm run docs` (JSDoc)
 
 ---
 

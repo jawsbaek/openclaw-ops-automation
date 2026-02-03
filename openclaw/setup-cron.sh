@@ -24,7 +24,7 @@ cron add \\
     "schedule": {"kind": "cron", "expr": "*/5 * * * *"},
     "payload": {
       "kind": "systemEvent",
-      "text": "Run metrics collection: cd $INSTALL_DIR && npm run worker:metrics"
+      "text": "Run metrics collection: cd $INSTALL_DIR && pnpm run worker:metrics"
     },
     "sessionTarget": "main"
   }'
@@ -48,7 +48,7 @@ cron add \\
     "schedule": {"kind": "cron", "expr": "*/10 * * * *"},
     "payload": {
       "kind": "systemEvent",
-      "text": "Run log analysis: cd $INSTALL_DIR && npm run worker:logs"
+      "text": "Run log analysis: cd $INSTALL_DIR && pnpm run worker:logs"
     },
     "sessionTarget": "main"
   }'
@@ -72,7 +72,7 @@ cron add \\
     "schedule": {"kind": "cron", "expr": "0 9 * * *", "tz": "Asia/Seoul"},
     "payload": {
       "kind": "systemEvent",
-      "text": "Generate daily ops report: cd $INSTALL_DIR && npm run worker:reporter"
+      "text": "Generate daily ops report: cd $INSTALL_DIR && pnpm run worker:reporter"
     },
     "sessionTarget": "main"
   }'
@@ -96,7 +96,7 @@ cron add \\
     "schedule": {"kind": "cron", "expr": "0 10 * * 1", "tz": "Asia/Seoul"},
     "payload": {
       "kind": "systemEvent",
-      "text": "Generate weekly ops report: cd $INSTALL_DIR && npm run worker:reporter --weekly"
+      "text": "Generate weekly ops report: cd $INSTALL_DIR && pnpm run worker:reporter --weekly"
     },
     "sessionTarget": "main"
   }'
@@ -161,9 +161,9 @@ EOF
 
 cat <<EOF
   cd $INSTALL_DIR
-  npm run worker:metrics   # Should create metrics/*.json
-  npm run worker:logs      # Should create analysis/*.md
-  npm run worker:reporter  # Should create reports/*.md
+  pnpm run worker:metrics   # Should create metrics/*.json
+  pnpm run worker:logs      # Should create analysis/*.md
+  pnpm run worker:reporter  # Should create reports/*.md
 
 EOF
 

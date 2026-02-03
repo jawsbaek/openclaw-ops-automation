@@ -13,7 +13,7 @@ AI-powered infrastructure monitoring and automation for OpenClaw.
 cd ~/.openclaw/workspace
 git clone https://github.com/jawsbaek/openclaw-ops-automation.git ops-monitoring
 cd ops-monitoring
-npm install
+pnpm install
 bash openclaw/deploy.sh
 ```
 
@@ -74,19 +74,19 @@ See [`openclaw/AGENTS.md`](openclaw/AGENTS.md) for detailed architecture.
 
 ```bash
 # Collect current metrics
-npm run worker:metrics
+pnpm run worker:metrics
 
 # Analyze recent logs
-npm run worker:logs
+pnpm run worker:logs
 
 # Generate daily report
-npm run worker:reporter
+pnpm run worker:reporter
 
 # Handle alerts
-npm run worker:alert
+pnpm run worker:alert
 
 # Run auto-healing
-npm run worker:autoheal
+pnpm run worker:autoheal
 ```
 
 ### OpenClaw Skill Integration
@@ -132,10 +132,10 @@ All configuration files are in [`openclaw/config/`](openclaw/config/):
 ### Run Tests
 
 ```bash
-npm test                  # Run all tests
-npm test -- --watch       # Watch mode
-npm run lint              # Lint code
-npm run lint:fix          # Auto-fix lint issues
+pnpm test                  # Run all tests
+pnpm test -- --watch       # Watch mode
+pnpm run lint              # Lint code
+pnpm run lint:fix          # Auto-fix lint issues
 ```
 
 ### Add New Worker
@@ -184,8 +184,8 @@ Contributions welcome! Please:
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Write tests for new functionality
-4. Ensure all tests pass (`npm test`)
-5. Lint your code (`npm run lint:fix`)
+4. Ensure all tests pass (`pnpm test`)
+5. Lint your code (`pnpm run lint:fix`)
 6. Commit changes (`git commit -m 'Add amazing feature'`)
 7. Push to branch (`git push origin feature/amazing-feature`)
 8. Open a Pull Request

@@ -4,6 +4,7 @@
   "description": "OpenClaw-based distributed operations monitoring and automation system",
   "main": "index.js",
   "type": "module",
+  "packageManager": "pnpm@9.0.0",
   "scripts": {
     "test": "vitest run --coverage",
     "test:watch": "vitest",
@@ -12,7 +13,7 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "check": "npm run format:check && npm run lint && npm test",
+    "check": "pnpm run format:check && pnpm run lint && pnpm test",
     "docs": "jsdoc -c jsdoc.json",
     "worker:orchestrator": "node ops-automation/workers/orchestrator.js",
     "worker:metrics": "node ops-automation/workers/metrics-collector.js",
