@@ -14,12 +14,12 @@
     "format:check": "biome format .",
     "check": "npm run format:check && npm run lint && npm test",
     "docs": "jsdoc -c jsdoc.json",
-    "start:orchestrator": "node ops-automation/agents/orchestrator.js",
-    "start:metrics": "node ops-automation/agents/metrics-collector.js",
-    "start:logs": "node ops-automation/agents/logs-analyzer.js",
-    "start:alert": "node ops-automation/agents/alert-handler.js",
-    "start:autoheal": "node ops-automation/agents/autoheal.js",
-    "start:reporter": "node ops-automation/agents/reporter.js"
+    "worker:orchestrator": "node ops-automation/workers/orchestrator.js",
+    "worker:metrics": "node ops-automation/workers/metrics-collector.js",
+    "worker:logs": "node ops-automation/workers/logs-analyzer.js",
+    "worker:alert": "node ops-automation/workers/alert-handler.js",
+    "worker:autoheal": "node ops-automation/workers/autoheal.js",
+    "worker:reporter": "node ops-automation/workers/reporter.js"
   },
   "keywords": [
     "openclaw",

@@ -1,89 +1,218 @@
-# OpenClaw 운영 자동화 시스템
+# OpenClaw Ops Automation
 
-OpenClaw 기반 분산 운영 모니터링 자동화 시스템. 여러 독립적인 AI 에이전트가 협력하여 인프라를 모니터링하고 자동으로 대응합니다.
+AI-powered infrastructure monitoring and automation for OpenClaw.
 
-## 🎯 특징
+[![Tests](https://github.com/jawsbaek/openclaw-ops-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/jawsbaek/openclaw-ops-automation/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-### 운영 자동화
-- **6개 협력 에이전트**: Orchestrator, Metrics Collector, Logs Analyzer, Alert Handler, AutoHeal, Reporter
-- **자동 메트릭 수집**: CPU, 메모리, 디스크, 네트워크, 프로세스 상태
-- **지능형 로그 분석**: 에러 패턴, 보안 위협, 이상 징후 감지
-- **자동 복구**: 디스크 정리, 프로세스 재시작, SSL 갱신 등
-- **스마트 알람**: 중복 필터링, 우선순위 판단, 에스컬레이션
-- **자동 리포팅**: 일일/주간/월간 운영 보고서
+---
 
-### 🤖 PR 자동 리뷰 & 머지
-- **자동 코드 리뷰**: AI 기반 코드 품질, 보안, 성능 분석
-- **보안 스캔**: 하드코딩된 시크릿, 명령 인젝션 패턴 감지
-- **자동 승인**: 모든 조건 충족 시 자동 승인 및 머지
-- **스마트 머지**: Squash/Merge/Rebase 전략 지원
-- **실시간 알림**: Slack/Discord 웹훅 통합
-- **안전 장치**: 화이트리스트, hold 라벨, 자동 revert
-
-## 🚀 빠른 시작
+## 🚀 Quick Start
 
 ```bash
-# 1. OpenClaw 설치 (필수)
-npm install -g openclaw
-
-# 2. 초기 설정
-cd ops-automation
-./scripts/setup.sh
-
-# 3. Orchestrator 시작
-openclaw agents spawn ops-orchestrator
+cd ~/.openclaw/workspace
+git clone https://github.com/jawsbaek/openclaw-ops-automation.git ops-monitoring
+cd ops-monitoring
+npm install
+bash openclaw/deploy.sh
 ```
 
-## 📚 상세 문서
+Then setup automated monitoring:
 
-### 운영 자동화
-자세한 설명은 [`ops-automation/README.md`](ops-automation/README.md)를 참조하세요.
-
-### PR 자동화
-PR 자동 리뷰 및 머지 시스템에 대한 자세한 내용은 [`docs/pr-automation-guide.md`](docs/pr-automation-guide.md)를 참조하세요.
-
-**주요 기능:**
-- ✅ **코드 품질 검사**: Biome 린팅 & 포맷팅, 테스트, 커버리지 (80% 이상)
-- 🔒 **보안 스캔**: npm audit, 시크릿 스캔, 인젝션 패턴 검사
-- 🤖 **AI 리뷰**: GPT-4 기반 코드 분석 (8/10 점 이상 자동 승인)
-- 🔀 **자동 머지**: 조건부 자동 머지 (squash/merge/rebase)
-- 📢 **알림**: Slack/Discord 실시간 알림
-
-**설정 방법:**
 ```bash
-# 1. GitHub Secrets 설정
-gh secret set OPENAI_API_KEY --body "sk-..."
-gh secret set SLACK_WEBHOOK --body "https://hooks.slack.com/..."
-
-# 2. 설정 파일 수정
-vim .github/auto-review-config.yml
-
-# 3. PR 생성 시 자동으로 리뷰 시작!
+bash openclaw/setup-cron.sh
 ```
 
-자세한 가이드: [`docs/pr-automation-guide.md`](docs/pr-automation-guide.md)
+---
 
-## 🔗 통합 가능한 툴
+## 📊 Features
 
-- **메트릭**: Prometheus, Grafana, CloudWatch
-- **로그**: ELK Stack, Loki, Fluentd  
-- **알람**: Alertmanager, PagerDuty, Opsgenie
-- **APM**: Datadog, New Relic, Sentry
+- **🔍 Metrics Collection**: CPU, Memory, Disk, Network stats (every 5 min)
+- **📊 Log Analysis**: Error patterns, anomaly detection (every 10 min)
+- **🚨 Alert Handling**: Automated triage and escalation
+- **🔧 Auto-Healing**: Automated remediation for common issues
+- **📝 Reporting**: Daily/weekly ops reports
+- **🔐 SSH Automation**: Remote command execution
+- **🩺 Deep Diagnostics**: CPU/Memory profiling, log aggregation
+- **💊 Code Healing**: Automated patching for code issues
+- **🎫 JSM Integration**: Jira Service Management incident tracking
 
-## 📋 요구사항
+---
 
-- OpenClaw >= 1.0
-- Node.js >= 18
-- macOS, Linux 또는 Windows (WSL)
+## 🏗️ Architecture
 
-## 📖 에이전트 명세
+9 specialized AI agents working together:
 
-각 에이전트의 상세 명세는 [`ops-automation/agents/`](ops-automation/agents/) 디렉토리를 참조하세요.
+| Agent | Role | Trigger | Output |
+|-------|------|---------|--------|
+| **Orchestrator** | Main coordinator | Heartbeat (5min) | - |
+| **Metrics Collector** | System stats | Cron (5min) | `metrics/*.json` |
+| **Logs Analyzer** | Log analysis | Cron (10min) | `analysis/*.md` |
+| **Alert Handler** | Alert triage | Event-based | - |
+| **AutoHeal** | Auto-remediation | On-demand | `incidents/*.md` |
+| **Reporter** | Report generation | Cron (daily 09:00) | `reports/*.md` |
+| **SSH Agent** | Remote execution | On-demand | - |
+| **Diagnostic Agent** | Deep diagnostics | On-demand | - |
+| **Code Healer** | Automated patching | On-demand | - |
 
-## 🤝 기여
+See [`openclaw/AGENTS.md`](openclaw/AGENTS.md) for detailed architecture.
 
-이슈 및 PR 환영합니다!
+---
 
-## 📄 라이선스
+## 📚 Documentation
 
-MIT
+- **[`openclaw/AGENTS.md`](openclaw/AGENTS.md)** - AI agent architecture and responsibilities
+- **[`openclaw/SKILL.md`](openclaw/SKILL.md)** - OpenClaw skill usage guide
+- **[`ops-automation/README.md`](ops-automation/README.md)** - Module documentation
+- **[`SECURITY.md`](SECURITY.md)** - Security best practices
+
+---
+
+## 🔧 Usage
+
+### Manual Execution
+
+```bash
+# Collect current metrics
+npm run worker:metrics
+
+# Analyze recent logs
+npm run worker:logs
+
+# Generate daily report
+npm run worker:reporter
+
+# Handle alerts
+npm run worker:alert
+
+# Run auto-healing
+npm run worker:autoheal
+```
+
+### OpenClaw Skill Integration
+
+Use this repository as an OpenClaw skill. See [`openclaw/SKILL.md`](openclaw/SKILL.md) for patterns:
+
+- **Health checks**: Collect metrics on-demand
+- **Issue investigation**: Analyze logs when problems arise
+- **Daily routine**: Generate reports via heartbeat
+- **Proactive monitoring**: Detect issues before they escalate
+
+### Automated Monitoring (Cron)
+
+Setup cron jobs for continuous monitoring:
+
+```bash
+bash openclaw/setup-cron.sh
+```
+
+This will show you commands to register in OpenClaw:
+- Metrics collection (every 5 minutes)
+- Log analysis (every 10 minutes)
+- Daily report (every day at 09:00)
+
+---
+
+## ⚙️ Configuration
+
+All configuration files are in [`openclaw/config/`](openclaw/config/):
+
+| File | Purpose |
+|------|---------|
+| `monitoring-sources.json` | Data sources (Prometheus, logs, APIs) |
+| `alert-thresholds.json` | Alert thresholds (CPU, memory, disk, latency) |
+| `autoheal-playbooks.json` | Remediation playbooks |
+| `ssh-whitelist.json` | Allowed SSH commands (security) |
+| `jsm-config.json` | Jira Service Management integration |
+
+---
+
+## 🧪 Development
+
+### Run Tests
+
+```bash
+npm test                  # Run all tests
+npm test -- --watch       # Watch mode
+npm run lint              # Lint code
+npm run lint:fix          # Auto-fix lint issues
+```
+
+### Add New Worker
+
+1. Create `ops-automation/workers/your-worker.js`
+2. Add tests in `ops-automation/__tests__/workers/your-worker.test.js`
+3. Add script to `package.json`:
+   ```json
+   "worker:your-worker": "node workers/your-worker.js"
+   ```
+4. Document in `openclaw/AGENTS.md` and `openclaw/SKILL.md`
+
+---
+
+## 🔒 Security
+
+- Workers run with least privilege
+- SSH commands require whitelist approval (`openclaw/config/ssh-whitelist.json`)
+- Sensitive data encrypted at rest
+- All automation actions are logged
+- Role-based access control (RBAC) for alert escalation
+
+See [`SECURITY.md`](SECURITY.md) for detailed security guidelines.
+
+---
+
+## 📊 Output Directories
+
+```
+ops-monitoring/
+├── metrics/      # System metrics (JSON, time-series)
+├── analysis/     # Log analysis results (Markdown)
+├── incidents/    # Incident records (Markdown)
+├── reports/      # Daily/weekly reports (Markdown)
+└── logs/         # Worker logs
+```
+
+All directories are excluded from git but preserved with `.gitkeep` files.
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Write tests for new functionality
+4. Ensure all tests pass (`npm test`)
+5. Lint your code (`npm run lint:fix`)
+6. Commit changes (`git commit -m 'Add amazing feature'`)
+7. Push to branch (`git push origin feature/amazing-feature`)
+8. Open a Pull Request
+
+---
+
+## 📝 License
+
+MIT License - see [`LICENSE`](LICENSE) for details.
+
+---
+
+## 🌟 Related Projects
+
+- **[OpenClaw](https://github.com/openclaw/openclaw)** - AI agent framework
+- **[Prometheus](https://prometheus.io/)** - Metrics collection
+- **[Grafana](https://grafana.com/)** - Metrics visualization
+- **[ELK Stack](https://www.elastic.co/elk-stack)** - Log management
+
+---
+
+## 📞 Support
+
+- **Documentation**: [`openclaw/SKILL.md`](openclaw/SKILL.md), [`openclaw/AGENTS.md`](openclaw/AGENTS.md)
+- **Issues**: [GitHub Issues](https://github.com/jawsbaek/openclaw-ops-automation/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/jawsbaek/openclaw-ops-automation/discussions)
+
+---
+
+**Built with ❤️ for OpenClaw**
